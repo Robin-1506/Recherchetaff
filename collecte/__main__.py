@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from . import score, stockage
-from .sources import adzuna, france_travail, jooble
+from .sources import adzuna, alertes_email, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -25,7 +25,7 @@ CHEMIN_STATUT = RACINE / "docs" / "data" / "statut.json"
 
 # Ordre de passage : la première source qui trouve une offre en garde la
 # fiche principale, les suivantes y ajoutent leur lien.
-SOURCES = [france_travail, adzuna, jooble]
+SOURCES = [france_travail, adzuna, jooble, alertes_email]
 
 log = logging.getLogger("collecte")
 
@@ -52,10 +52,16 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
             statut["message"] = str(e)
             compte_rendu.append(f"- ❌ **{source.NOM}** en échec : {e}")
             continue
-        bilan = stockage.integrer(
-            donnees, source.NOM, res["offres"], horodatage, res["complet"],
-            encore_en_ligne=res.get("verifier"), delai_jours=res.get("delai_jours"),
-        )
+        # Une source peut regrouper plusieurs noms (ex. « LinkedIn (alerte) »,
+        # « APEC (alerte) »…) : chacun est intégré et expiré séparément.
+        bilan = {"nouvelles": 0, "doublons": 0, "expirees": 0}
+        for nom in res.get("noms_sources", [source.NOM]):
+            offres_nom = [o for o in res["offres"] if o["sources"][0]["nom"] == nom]
+            b = stockage.integrer(
+                donnees, nom, offres_nom, horodatage, res["complet"],
+                encore_en_ligne=res.get("verifier"), delai_jours=res.get("delai_jours"),
+            )
+            bilan = {k: bilan[k] + b[k] for k in bilan}
         statut.update(ok=True, nb_offres=len(res["offres"]), message=" ; ".join(res["avertissements"]))
         compte_rendu.append(
             f"- **{source.NOM}** : {len(res['offres'])} offres trouvées, {bilan['nouvelles']} nouvelles, "
