@@ -14,6 +14,7 @@ import time
 import requests
 
 from ..modele import detecter_teletravail, normaliser_texte, tronquer
+from .commun import ErreurSource, SourceNonConfiguree
 
 NOM = "France Travail"
 CLE = "france_travail"
@@ -40,10 +41,6 @@ _CONTRATS = {
     "REP": "Autre",
     "CCE": "Autre",
 }
-
-
-class ErreurSource(Exception):
-    pass
 
 
 class ClientFranceTravail:
@@ -166,7 +163,8 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
 def collecter(config: dict, client: ClientFranceTravail | None = None) -> dict:
     """Lance toutes les recherches France Travail.
 
-    Renvoie {"offres": [...], "avertissements": [...], "complet": bool, "client": client}.
+    Renvoie {"offres": [...], "avertissements": [...], "complet": bool,
+    "verifier": fonction qui dit quelles offres disparues existent encore}.
     « complet » est faux si une recherche a échoué : on ne marquera alors
     aucune offre comme expirée, pour ne pas se tromper.
     """
@@ -174,7 +172,7 @@ def collecter(config: dict, client: ClientFranceTravail | None = None) -> dict:
         client_id = os.environ.get("FT_CLIENT_ID")
         client_secret = os.environ.get("FT_CLIENT_SECRET")
         if not client_id or not client_secret:
-            raise ErreurSource("Secrets FT_CLIENT_ID / FT_CLIENT_SECRET absents.")
+            raise SourceNonConfiguree("non configurée (secrets FT_CLIENT_ID / FT_CLIENT_SECRET absents)")
         client = ClientFranceTravail(client_id, client_secret)
 
     rech = config["recherche"]
@@ -200,27 +198,40 @@ def collecter(config: dict, client: ClientFranceTravail | None = None) -> dict:
         except (ErreurSource, requests.RequestException) as e:
             avertissements.append(f"Recherche « {libelle} » en échec : {e}")
             log.warning("Recherche « %s » en échec : %s", libelle, e)
+            if reussites == 0 and len(avertissements) >= 3:
+                break  # la source semble en panne : inutile d'insister
             continue
         reussites += 1
         gardees = 0
+        mention_teletravail = 0
         for brute in brutes:
             offre = convertir(brute, hors_zone=national)
+            mention_teletravail += offre["teletravail"] is not None
             if national and offre["teletravail"] != "complet":
                 continue
             if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
                 continue  # déjà trouvée dans la zone : on garde cette version
             offres[offre["id"]] = offre
             gardees += 1
-        log.info("Recherche « %s » : %d offres reçues, %d gardées", libelle, len(brutes), gardees)
+        log.info("Recherche « %s » : %d offres reçues (%d parlent de télétravail), %d nouvelles gardées",
+                 libelle, len(brutes), mention_teletravail, gardees)
 
     if requetes and reussites == 0:
-        raise ErreurSource("Toutes les recherches France Travail ont échoué. " + " | ".join(avertissements[:3]))
+        raise ErreurSource("Toutes les recherches France Travail ont échoué. " + avertissements[0])
+
+    details = []
+    if not rech.get("codes_rome"):
+        details += ["", "### Codes ROME présents dans les offres trouvées", "",
+                    "| Code | Métier | Offres | Exemples |", "|---|---|---|---|"]
+        details += [f"| {e['code']} | {e['libelle']} | {e['nb']} | {' / '.join(e['exemples'])} |"
+                    for e in rapport_rome(list(offres.values()))]
 
     return {
         "offres": list(offres.values()),
+        "details": details,
         "avertissements": avertissements,
         "complet": not avertissements,
-        "client": client,
+        "verifier": lambda ids: offres_encore_en_ligne(client, ids),
     }
 
 

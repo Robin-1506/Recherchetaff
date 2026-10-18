@@ -14,7 +14,8 @@ from pathlib import Path
 import yaml
 
 from . import stockage
-from .sources import france_travail
+from .sources import adzuna, france_travail, jooble
+from .sources.commun import SourceNonConfiguree
 
 RACINE = Path(__file__).resolve().parent.parent
 CHEMIN_CONFIG = RACINE / "config" / "criteres.yaml"
@@ -22,45 +23,46 @@ CHEMIN_DONNEES = RACINE / "docs" / "data" / "offres.chiffre.json"
 # État des sources (non chiffré, sans donnée personnelle) : réécrit à chaque collecte.
 CHEMIN_STATUT = RACINE / "docs" / "data" / "statut.json"
 
+# Ordre de passage : la première source qui trouve une offre en garde la
+# fiche principale, les suivantes y ajoutent leur lien.
+SOURCES = [france_travail, adzuna, jooble]
+
 log = logging.getLogger("collecte")
 
 
 def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | None = None) -> tuple[list[str], dict]:
-    """Lance toutes les sources et met à jour `donnees`.
+    """Lance toutes les sources, l'une après l'autre, et met à jour `donnees`.
     Renvoie le compte rendu (Markdown) et le statut des sources."""
     clients = clients or {}
     horodatage = maintenant.isoformat(timespec="seconds")
     compte_rendu = [f"## Collecte du {maintenant:%d/%m/%Y %H:%M} (UTC)", ""]
     statuts: dict[str, dict] = {}
 
-    # --- France Travail ---------------------------------------------------
-    try:
-        res = france_travail.collecter(config, clients.get(france_travail.CLE))
-        client = res["client"]
+    for source in SOURCES:
+        statut = {"nom": source.NOM, "ok": False, "date": horodatage, "nb_offres": 0, "message": ""}
+        statuts[source.CLE] = statut
+        try:
+            res = source.collecter(config, clients.get(source.CLE))
+        except SourceNonConfiguree as e:
+            statut.update(non_configuree=True, message=str(e))
+            compte_rendu.append(f"- ⏸️ **{source.NOM}** {e}")
+            continue
+        except Exception as e:  # une source en panne ne doit pas bloquer les autres
+            log.exception("%s en échec", source.NOM)
+            statut["message"] = str(e)
+            compte_rendu.append(f"- ❌ **{source.NOM}** en échec : {e}")
+            continue
         bilan = stockage.integrer(
-            donnees, france_travail.CLE, france_travail.NOM, res["offres"], horodatage, res["complet"],
-            encore_en_ligne=lambda ids: france_travail.offres_encore_en_ligne(client, ids),
+            donnees, source.NOM, res["offres"], horodatage, res["complet"],
+            encore_en_ligne=res.get("verifier"), delai_jours=res.get("delai_jours"),
         )
-        statuts[france_travail.CLE] = {
-            "nom": france_travail.NOM, "ok": True, "date": horodatage, "nb_offres": len(res["offres"]),
-            "message": " ; ".join(res["avertissements"]),
-        }
+        statut.update(ok=True, nb_offres=len(res["offres"]), message=" ; ".join(res["avertissements"]))
         compte_rendu.append(
-            f"- **{france_travail.NOM}** : {len(res['offres'])} offres trouvées, "
-            f"{bilan['nouvelles']} nouvelles, {bilan['expirees']} expirées"
+            f"- **{source.NOM}** : {len(res['offres'])} offres trouvées, {bilan['nouvelles']} nouvelles, "
+            f"{bilan['doublons']} doublons fusionnés, {bilan['expirees']} expirées"
         )
         compte_rendu += [f"  - ⚠️ {a}" for a in res["avertissements"]]
-        if not config["recherche"].get("codes_rome"):
-            compte_rendu += ["", "### Codes ROME présents dans les offres trouvées", "",
-                             "| Code | Métier | Offres | Exemples |", "|---|---|---|---|"]
-            for e in france_travail.rapport_rome(res["offres"]):
-                compte_rendu.append(f"| {e['code']} | {e['libelle']} | {e['nb']} | {' / '.join(e['exemples'])} |")
-    except Exception as e:  # une source en panne ne doit pas bloquer les autres
-        log.exception("France Travail en échec")
-        statuts[france_travail.CLE] = {
-            "nom": france_travail.NOM, "ok": False, "date": horodatage, "nb_offres": 0, "message": str(e),
-        }
-        compte_rendu.append(f"- ❌ **{france_travail.NOM}** en échec : {e}")
+        compte_rendu += res.get("details", [])
 
     stockage.alleger(donnees, maintenant)
     actives = sum(1 for o in donnees["offres"] if not o.get("expiree"))

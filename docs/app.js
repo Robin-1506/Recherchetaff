@@ -128,7 +128,9 @@ function afficherStatut(statut, aucuneDonnee) {
   }
   info.textContent = `Dernière collecte : ${date(statut.derniere_collecte, true)}`;
   for (const s of Object.values(statut.sources || {})) {
-    if (!s.ok) {
+    if (s.non_configuree) {
+      alertes.append(el("p", { class: "alerte info" }, `ℹ️ ${s.nom} n'est pas encore configurée.`));
+    } else if (!s.ok) {
       alertes.append(el("p", { class: "alerte" }, `⚠️ ${s.nom} n'a pas pu être consultée lors de la dernière collecte : ${s.message}`));
     } else if (s.message) {
       alertes.append(el("p", { class: "alerte" }, `ℹ️ ${s.nom} : collecte partielle (${s.message})`));

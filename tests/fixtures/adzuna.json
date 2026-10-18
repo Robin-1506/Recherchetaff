@@ -1,0 +1,10 @@
+{"count": 2, "results": [
+  {"id": "4876543210", "title": "<strong>Product Owner</strong> H/F", "description": "Rattaché au DSI, vous pilotez le <strong>backlog</strong>&nbsp;produit. Télétravail partiel…",
+   "created": "2026-10-16T10:00:00Z", "redirect_url": "https://www.adzuna.fr/land/ad/4876543210",
+   "company": {"display_name": "ACME"}, "location": {"display_name": "Nantes, Loire-Atlantique"},
+   "contract_type": "permanent", "contract_time": "full_time", "salary_min": 45000, "salary_max": 52000, "salary_is_predicted": "0"},
+  {"id": "4876543211", "title": "Stage Business Analyst", "description": "Stage de 6 mois",
+   "created": "2026-10-15T10:00:00Z", "redirect_url": "https://www.adzuna.fr/land/ad/4876543211",
+   "company": {"display_name": "Banque Ouest"}, "location": {"display_name": "Saint-Herblain"},
+   "salary_min": 30000, "salary_max": 30000, "salary_is_predicted": "1"}
+]}

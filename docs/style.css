@@ -99,6 +99,8 @@ input[type="password"], input[type="search"], select {
   font-size: .9rem;
 }
 
+.alerte.info { background: var(--badge-fond); color: var(--discret); }
+
 .filtres { display: grid; gap: 8px; margin: 16px 0 8px; }
 .filtres-ligne { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .filtres-ligne select { flex: 1 1 160px; width: auto; }

@@ -4,9 +4,9 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 1 sur 7.** Source France Travail et site web.
-> Les étapes à venir ajouteront Adzuna, Jooble, les alertes e-mail, le score,
-> le suivi des candidatures, le récap quotidien et l'analyse IA.
+> **État actuel : étape 2 sur 7.** Sources France Travail, Adzuna et Jooble,
+> fusion des doublons, site web. Les étapes à venir ajouteront le score, les
+> alertes e-mail, le suivi des candidatures, le récap quotidien et l'analyse IA.
 
 ---
 
@@ -14,7 +14,9 @@ sur un site web protégé par un mot de passe.
 
 1. **Chaque matin vers 7 h** (heure de Paris), GitHub lance automatiquement le
    programme de collecte (dans l'onglet **Actions** du dépôt).
-2. Le programme interroge les sources d'offres et met toutes les offres au même format.
+2. Le programme interroge les sources d'offres une par une et met toutes les offres
+   au même format. Une même offre trouvée sur plusieurs sites (même intitulé, même
+   entreprise) n'apparaît qu'une fois, avec un lien vers chaque site.
 3. Les offres sont enregistrées dans `docs/data/offres.chiffre.json`, **chiffré** avec
    ton mot de passe. Les offres qui ont disparu sont marquées « expirées » mais restent
    enregistrées.
@@ -72,6 +74,12 @@ Pour changer une valeur : clique sur le crayon à côté du secret existant.
 | `FT_CLIENT_ID` | Identifiant de l'application France Travail | 1 |
 | `FT_CLIENT_SECRET` | Clé secrète de l'application France Travail | 1 |
 | `MOT_DE_PASSE_SITE` | Mot de passe du site (chiffre les données) | 1 |
+| `ADZUNA_APP_ID` | Identifiant Adzuna (Application ID) | 2 |
+| `ADZUNA_APP_KEY` | Clé Adzuna (Application Key) | 2 |
+| `JOOBLE_API_KEY` | Clé Jooble | 2 |
+
+Si un secret manque, la source correspondante est simplement indiquée « pas encore
+configurée » sur le site, et les autres continuent de fonctionner.
 
 ⚠️ Si tu changes `MOT_DE_PASSE_SITE`, les données déjà enregistrées ne pourront plus
 être lues. Il faudra supprimer `docs/data/offres.chiffre.json` pour repartir de zéro.
@@ -98,18 +106,23 @@ dans les secrets) et tes notes de candidature.
 | Source | Méthode | Statut |
 |---|---|---|
 | France Travail | API officielle « Offres d'emploi v2 » | ✅ étape 1 |
-| Adzuna | API | étape 2 |
-| Jooble | API | étape 2 |
+| Adzuna | API (offre gratuite : 250 appels par jour) | ✅ étape 2 |
+| Jooble | API | ✅ étape 2 |
 | APEC, LinkedIn, Welcome to the Jungle… | Alertes e-mail lues dans une boîte Gmail dédiée | étape 4 |
 
 Les offres France Travail affichent leur source, leur date de mise à jour et un lien
 vers l'offre d'origine, comme le demandent les conditions de réutilisation de France Travail.
 
+**Quand une offre est-elle « expirée » ?** France Travail permet de vérifier offre par
+offre : dès qu'une offre n'y existe plus, elle est marquée expirée. Adzuna et Jooble ne
+le permettent pas : une offre est considérée comme retirée si elle n'a plus été vue
+pendant 7 jours. Une offre reste affichée tant qu'au moins un de ses liens est actif.
+
 ### Codes ROME
 
-Chaque collecte liste dans son compte rendu les codes métiers ROME présents dans les
-offres trouvées par mots-clés. Ces codes viennent directement de France Travail. On
-s'en sert pour remplir `codes_rome` dans `config/criteres.yaml`.
+Les codes métiers ROME de `config/criteres.yaml` ont été relevés dans les offres réelles
+de France Travail (et non devinés). Pour revoir la liste, vide-la (`codes_rome: []`) :
+la collecte suivante affichera dans son compte rendu les codes trouvés par mots-clés.
 
 ---
 
