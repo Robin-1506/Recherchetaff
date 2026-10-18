@@ -120,6 +120,9 @@ def gerer_recap(config: dict, donnees: dict, maintenant: datetime, mot_de_passe:
         return {"ok": True, "envoye": False, "message": "Rien de nouveau : pas d'e-mail aujourd'hui."}
     try:
         recap.envoyer(recap.composer(contenu, url_site(config)), expediteur, mdp_gmail, destinataire)
+    except recap.ErreurEnvoi as e:  # message déjà débarrassé des adresses
+        log.error("Envoi du récap impossible : %s", e)
+        return {"ok": False, "envoye": False, "message": f"Envoi du récap impossible : {e}."}
     except Exception as e:  # le message d'erreur peut contenir une adresse : on ne garde que son type
         log.error("Envoi du récap impossible (%s)", e.__class__.__name__)
         return {"ok": False, "envoye": False, "message": f"Envoi du récap impossible ({e.__class__.__name__})."}

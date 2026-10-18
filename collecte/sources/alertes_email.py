@@ -280,7 +280,7 @@ def lire_boite(adresse: str, mot_de_passe: str, jours: int) -> list[bytes]:
     depuis = (datetime.now(timezone.utc) - timedelta(days=jours)).strftime("%d-%b-%Y")
     try:
         with imaplib.IMAP4_SSL(SERVEUR) as imap:
-            imap.login(adresse, mot_de_passe)
+            imap.login(adresse, mot_de_passe.replace(" ", "").strip())
             imap.select("INBOX", readonly=True)
             statut, donnees = imap.search(None, "SINCE", depuis)
             if statut != "OK":

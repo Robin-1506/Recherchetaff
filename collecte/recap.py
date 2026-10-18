@@ -10,6 +10,7 @@ vers l'adresse du secret RECAP_DESTINATAIRE.
 
 import html
 import logging
+import re
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
@@ -137,9 +138,46 @@ def composer(recap: dict, url_site: str) -> EmailMessage:
     return message
 
 
+class ErreurEnvoi(Exception):
+    """Échec d'envoi, avec un message sans adresse e-mail (affichable publiquement)."""
+
+
+def masquer(texte: str) -> str:
+    return re.sub(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", "<adresse>", texte)
+
+
+def _ouvrir(mode: str) -> smtplib.SMTP:
+    if mode == "SSL 465":
+        return smtplib.SMTP_SSL(SERVEUR_SMTP, 465, timeout=30)
+    smtp = smtplib.SMTP(SERVEUR_SMTP, 587, timeout=30)
+    smtp.ehlo()
+    smtp.starttls()
+    smtp.ehlo()
+    return smtp
+
+
 def envoyer(message: EmailMessage, expediteur: str, mot_de_passe: str, destinataire: str) -> None:
+    """Envoie par Gmail : port 465 (SSL), puis 587 (STARTTLS) en secours."""
     message["From"] = f"Veille emploi <{expediteur}>"
     message["To"] = destinataire
-    with smtplib.SMTP_SSL(SERVEUR_SMTP, 465, timeout=30) as smtp:
-        smtp.login(expediteur, mot_de_passe)
-        smtp.send_message(message)
+    mot_de_passe = mot_de_passe.replace(" ", "").strip()  # « abcd efgh ijkl mnop » → « abcdefghijklmnop »
+    echecs = []
+    for mode in ("SSL 465", "STARTTLS 587"):
+        etape = "connexion"
+        try:
+            with _ouvrir(mode) as smtp:
+                etape = "identification"
+                smtp.login(expediteur, mot_de_passe)
+                etape = "envoi"
+                smtp.send_message(message)
+            return
+        except smtplib.SMTPAuthenticationError as e:
+            raise ErreurEnvoi(
+                "identification refusée par Gmail : vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI "
+                f"(code {e.smtp_code})"
+            ) from e
+        except (smtplib.SMTPException, OSError) as e:
+            detail = masquer(str(e))[:150] or e.__class__.__name__
+            echecs.append(f"{mode}, étape {etape} : {e.__class__.__name__} {detail}")
+            log.warning("Envoi du récap (%s) en échec à l'étape %s : %s", mode, etape, detail)
+    raise ErreurEnvoi(" ; ".join(echecs))
