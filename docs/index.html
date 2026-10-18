@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Veille emploi Nantes</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8E%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Écran de déverrouillage -->
+  <main id="ecran-verrou" class="verrou" hidden>
+    <form id="form-verrou" class="carte verrou-carte">
+      <h1>Veille emploi Nantes</h1>
+      <p class="discret">Les données sont chiffrées. Saisis ton mot de passe pour les afficher.</p>
+      <label for="mdp">Mot de passe</label>
+      <input id="mdp" type="password" autocomplete="current-password" required>
+      <label class="case"><input id="memoriser" type="checkbox" checked> Se souvenir sur cet appareil</label>
+      <button type="submit" class="bouton-principal">Déverrouiller</button>
+      <p id="erreur-verrou" class="erreur" role="alert" hidden></p>
+    </form>
+  </main>
+
+  <!-- Application -->
+  <div id="app" hidden>
+    <header class="entete">
+      <div class="entete-ligne">
+        <h1>Veille emploi Nantes</h1>
+        <button id="verrouiller" class="bouton-discret" type="button" title="Oublier le mot de passe sur cet appareil">Verrouiller</button>
+      </div>
+      <p id="info-collecte" class="discret"></p>
+      <div id="alertes-sources"></div>
+    </header>
+
+    <section class="filtres" aria-label="Filtres">
+      <input id="f-texte" type="search" placeholder="Rechercher (titre, entreprise, ville…)" aria-label="Rechercher">
+      <div class="filtres-ligne">
+        <select id="f-contrat" aria-label="Contrat">
+          <option value="">Tous contrats</option>
+        </select>
+        <select id="f-teletravail" aria-label="Télétravail">
+          <option value="">Télétravail : tous</option>
+          <option value="complet">Télétravail complet</option>
+          <option value="partiel">Télétravail partiel</option>
+          <option value="aucun">Non précisé</option>
+        </select>
+        <select id="f-source" aria-label="Source">
+          <option value="">Toutes sources</option>
+        </select>
+      </div>
+      <div class="filtres-ligne">
+        <label class="case"><input id="f-nouvelles" type="checkbox"> Nouvelles seulement</label>
+        <label class="case"><input id="f-expirees" type="checkbox"> Afficher les expirées</label>
+      </div>
+    </section>
+
+    <p id="compteur" class="compteur" aria-live="polite"></p>
+    <ul id="liste" class="liste"></ul>
+  </div>
+
+  <!-- Fiche détaillée -->
+  <dialog id="fiche" class="fiche" aria-labelledby="fiche-titre">
+    <div class="fiche-contenu">
+      <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
+      <h2 id="fiche-titre"></h2>
+      <p id="fiche-sous-titre" class="discret"></p>
+      <div id="fiche-badges" class="badges"></div>
+      <dl id="fiche-infos" class="infos"></dl>
+      <div id="fiche-liens" class="liens"></div>
+      <h3>Description</h3>
+      <div id="fiche-description" class="description"></div>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

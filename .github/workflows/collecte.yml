@@ -1,0 +1,79 @@
+# Collecte quotidienne des offres, puis publication du site.
+# Se lance tout seul chaque matin, ou à la main : onglet « Actions »,
+# « Collecte des offres », bouton « Run workflow ».
+name: Collecte des offres
+
+on:
+  schedule:
+    # GitHub ne connaît que l'heure UTC : on programme deux horaires et on ne
+    # garde que celui qui tombe à 6 h 45 à Paris (heure d'été ou d'hiver).
+    - cron: "45 4 * * *"
+    - cron: "45 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: collecte
+
+jobs:
+  horaire:
+    runs-on: ubuntu-latest
+    outputs:
+      lancer: ${{ steps.choix.outputs.lancer }}
+    steps:
+      - id: choix
+        env:
+          PROGRAMME: ${{ github.event.schedule }}
+        run: |
+          decalage=$(TZ=Europe/Paris date +%z)
+          lancer=true
+          if [ -n "$PROGRAMME" ]; then
+            { [ "$PROGRAMME" = "45 4 * * *" ] && [ "$decalage" = "+0200" ]; } ||
+            { [ "$PROGRAMME" = "45 5 * * *" ] && [ "$decalage" = "+0100" ]; } || lancer=false
+          fi
+          echo "Heure de Paris : $(TZ=Europe/Paris date +%H:%M) → lancement : $lancer"
+          echo "lancer=$lancer" >> "$GITHUB_OUTPUT"
+
+  collecte:
+    needs: horaire
+    if: needs.horaire.outputs.lancer == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Collecter les offres
+        env:
+          FT_CLIENT_ID: ${{ secrets.FT_CLIENT_ID }}
+          FT_CLIENT_SECRET: ${{ secrets.FT_CLIENT_SECRET }}
+          MOT_DE_PASSE_SITE: ${{ secrets.MOT_DE_PASSE_SITE }}
+        run: python -m collecte
+
+      - name: Enregistrer les données dans le dépôt
+        run: |
+          git config user.name "veille-emploi[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "Rien à enregistrer."
+          else
+            git commit -m "Collecte du $(TZ=Europe/Paris date +'%d/%m/%Y')"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+  publication:
+    needs: collecte
+    if: github.ref_name == 'main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/publication.yml
