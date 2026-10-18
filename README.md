@@ -4,10 +4,10 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 3 sur 7.** Sources France Travail, Adzuna et Jooble,
-> fusion des doublons, score par poste cible, site web. Les étapes à venir
-> ajouteront les alertes e-mail, le suivi des candidatures, le récap quotidien
-> et l'analyse IA.
+> **État actuel : étape 4 sur 7.** Sources France Travail, Adzuna, Jooble et
+> alertes e-mail, fusion des doublons, score par poste cible, site web. Les
+> étapes à venir ajouteront le suivi des candidatures, le récap quotidien et
+> l'analyse IA.
 
 ---
 
@@ -105,6 +105,8 @@ Pour changer une valeur : clique sur le crayon à côté du secret existant.
 | `ADZUNA_APP_ID` | Identifiant Adzuna (Application ID) | 2 |
 | `ADZUNA_APP_KEY` | Clé Adzuna (Application Key) | 2 |
 | `JOOBLE_API_KEY` | Clé Jooble | 2 |
+| `GMAIL_ADRESSE` | Adresse de la boîte Gmail dédiée aux alertes | 4 |
+| `GMAIL_MOT_DE_PASSE_APPLI` | Mot de passe d'application de cette boîte (16 lettres) | 4 |
 
 Si un secret manque, la source correspondante est simplement indiquée « pas encore
 configurée » sur le site, et les autres continuent de fonctionner.
@@ -136,7 +138,7 @@ dans les secrets) et tes notes de candidature.
 | France Travail | API officielle « Offres d'emploi v2 » | ✅ étape 1 |
 | Adzuna | API (offre gratuite : 250 appels par jour) | ✅ étape 2 |
 | Jooble | API | ✅ étape 2 |
-| APEC, LinkedIn, Welcome to the Jungle… | Alertes e-mail lues dans une boîte Gmail dédiée | étape 4 |
+| APEC, LinkedIn, Welcome to the Jungle, HelloWork, Indeed | Alertes e-mail lues dans une boîte Gmail dédiée | ✅ étape 4 |
 
 Les offres France Travail affichent leur source, leur date de mise à jour et un lien
 vers l'offre d'origine, comme le demandent les conditions de réutilisation de France Travail.
@@ -145,6 +147,24 @@ vers l'offre d'origine, comme le demandent les conditions de réutilisation de F
 offre : dès qu'une offre n'y existe plus, elle est marquée expirée. Adzuna et Jooble ne
 le permettent pas : une offre est considérée comme retirée si elle n'a plus été vue
 pendant 7 jours. Une offre reste affichée tant qu'au moins un de ses liens est actif.
+
+### Alertes e-mail
+
+Le programme lit (sans rien modifier ni marquer comme lu) les e-mails reçus ces 7 derniers
+jours dans la boîte Gmail dédiée. Il y repère les liens d'offres de chaque site, et en
+déduit l'intitulé, l'entreprise et le lieu. Aucun site n'est consulté directement.
+
+- **Créer une alerte** : sur le site (APEC, Welcome to the Jungle…), crée une alerte avec
+  tes critères et l'adresse de la boîte dédiée.
+- **Alertes envoyées à ta boîte perso** (LinkedIn, par exemple) : crée dans ta boîte perso
+  un transfert automatique vers la boîte dédiée. Les e-mails transférés sont lus de la même façon.
+- **Un site n'est pas reconnu ?** Le compte rendu de la collecte indique, pour chaque e-mail,
+  combien d'offres ont été trouvées. Si un e-mail n'a rien donné, il affiche la forme de ses
+  liens (sans données personnelles). Il suffit alors d'ajouter ou d'ajuster un « motif » dans
+  la section `alertes_email:` de `config/criteres.yaml`.
+
+Une offre vue seulement dans les alertes est considérée comme retirée au bout de 21 jours
+sans nouvelle mention.
 
 ### Codes ROME
 

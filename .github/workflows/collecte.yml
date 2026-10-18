@@ -56,6 +56,8 @@ jobs:
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+          GMAIL_ADRESSE: ${{ secrets.GMAIL_ADRESSE }}
+          GMAIL_MOT_DE_PASSE_APPLI: ${{ secrets.GMAIL_MOT_DE_PASSE_APPLI }}
           MOT_DE_PASSE_SITE: ${{ secrets.MOT_DE_PASSE_SITE }}
         run: python -m collecte
 

@@ -60,6 +60,39 @@ recherche:
     publiees_depuis_jours: 31
 
 # =====================================================================
+#  ALERTES E-MAIL (boîte Gmail dédiée)
+# ---------------------------------------------------------------------
+#  Le programme lit les e-mails reçus ces derniers jours et repère les
+#  liens d'offres de chaque site grâce au « motif » de leur adresse.
+#  Tu peux transférer des alertes depuis ta boîte perso : ça marche aussi.
+# =====================================================================
+alertes_email:
+  # Nombre de jours d'e-mails relus à chaque collecte.
+  jours_relus: 7
+  # Une offre vue seulement dans les alertes est considérée comme retirée
+  # si aucun e-mail ne l'a mentionnée depuis ce nombre de jours.
+  jours_avant_expiration: 21
+  # Pour chaque site : « motif_lien » reconnaît l'adresse d'un lien d'offre
+  # (le morceau (?P<id>…) en extrait l'identifiant) ; « url_offre » donne le
+  # lien propre, sans suivi publicitaire, affiché sur le site.
+  sites:
+    - nom: LinkedIn
+      motif_lien: 'linkedin\.com/(?:comm/)?jobs/view/(?P<id>\d+)'
+      url_offre: 'https://www.linkedin.com/jobs/view/{id}'
+    - nom: APEC
+      motif_lien: 'apec\.fr/.*?detail-offre/(?P<id>[0-9A-Za-z]+)'
+      url_offre: 'https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/{id}'
+    - nom: Welcome to the Jungle
+      motif_lien: 'welcometothejungle\.com/\w{2}/companies/[^/\s"]+/jobs/(?P<id>[^/?\s"#]+)'
+      url_offre: 'https://www.{lien}'
+    - nom: HelloWork
+      motif_lien: 'hellowork\.com/\w{2}-\w{2}/emplois/(?P<id>\d+)'
+      url_offre: 'https://www.hellowork.com/fr-fr/emplois/{id}.html'
+    - nom: Indeed
+      motif_lien: 'indeed\.\w+/(?:rc/clk|viewjob|pagead/clk|m/viewjob)\?(?:[^"\s]*&)?jk=(?P<id>[0-9a-f]+)'
+      url_offre: 'https://fr.indeed.com/viewjob?jk={id}'
+
+# =====================================================================
 #  SCORE DE PERTINENCE (sur 100)
 # ---------------------------------------------------------------------
 #  score = points du poste cible + bonus mots-clés + lieu + contrat
