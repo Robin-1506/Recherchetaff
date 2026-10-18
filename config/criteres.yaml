@@ -98,6 +98,18 @@ alertes_email:
       url_offre: 'https://fr.indeed.com/viewjob?jk={id}'
 
 # =====================================================================
+#  RÉCAP QUOTIDIEN PAR E-MAIL
+# ---------------------------------------------------------------------
+#  Envoyé après la collecte automatique du matin, seulement s'il y a de
+#  nouvelles offres dans tes postes cibles ou des candidatures à relancer.
+#  Destinataire : secret GitHub RECAP_DESTINATAIRE.
+# =====================================================================
+recap:
+  actif: true
+  # Nombre de meilleures nouvelles offres détaillées dans l'e-mail.
+  nb_meilleures: 5
+
+# =====================================================================
 #  SCORE DE PERTINENCE (sur 100)
 # ---------------------------------------------------------------------
 #  score = points du poste cible + bonus mots-clés + lieu + contrat
