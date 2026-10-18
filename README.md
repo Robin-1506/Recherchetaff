@@ -1,1 +1,125 @@
-# Recherchetaff
+# Veille emploi Nantes
+
+Application personnelle qui rassemble chaque matin les offres d'emploi de plusieurs
+sources, autour de Nantes (et en télétravail complet en France), et les affiche
+sur un site web protégé par un mot de passe.
+
+> **État actuel : étape 1 sur 7.** Source France Travail et site web.
+> Les étapes à venir ajouteront Adzuna, Jooble, les alertes e-mail, le score,
+> le suivi des candidatures, le récap quotidien et l'analyse IA.
+
+---
+
+## Comment ça marche
+
+1. **Chaque matin vers 7 h** (heure de Paris), GitHub lance automatiquement le
+   programme de collecte (dans l'onglet **Actions** du dépôt).
+2. Le programme interroge les sources d'offres et met toutes les offres au même format.
+3. Les offres sont enregistrées dans `docs/data/offres.chiffre.json`, **chiffré** avec
+   ton mot de passe. Les offres qui ont disparu sont marquées « expirées » mais restent
+   enregistrées.
+4. Le site est republié. Tu l'ouvres, tu saisis ton mot de passe une fois par appareil,
+   et tu vois les offres.
+
+Si une source est en panne, les autres continuent. Le site affiche alors un bandeau
+qui indique quelle source n'a pas pu être consultée.
+
+### Lancer une collecte à la main
+
+Onglet **Actions**, puis **Collecte des offres** dans la liste à gauche, puis bouton
+**Run workflow** et **Run workflow** (vert). Compte environ 2 minutes. Le compte rendu
+s'affiche en cliquant sur le lancement, puis sur **collecte**.
+
+---
+
+## Modifier les mots-clés et les réglages
+
+Tous les réglages sont dans **`config/criteres.yaml`**.
+
+Pour le modifier sans rien installer :
+1. ouvre le fichier sur GitHub ;
+2. clique sur l'icône **crayon** (« Edit this file ») ;
+3. fais ta modification ;
+4. clique sur **Commit changes…** puis de nouveau sur **Commit changes**.
+
+C'est pris en compte à la collecte suivante. Tu peux aussi en lancer une à la main.
+
+Quelques règles d'écriture :
+- une ligne qui commence par `#` est un commentaire, ignoré par le programme ;
+- l'alignement (les espaces en début de ligne) compte : garde le même que les lignes voisines ;
+- dans une liste, chaque élément est sur sa ligne et commence par `- `.
+
+Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajoute une ligne
+`    - scrum master` dans la liste `mots_cles` (avec 4 espaces avant le tiret, comme les autres).
+
+---
+
+## Ajouter ou changer une clé d'API (les « secrets »)
+
+Les clés ne sont **jamais** écrites dans le code. Elles sont rangées dans le coffre-fort
+de GitHub :
+
+1. dans le dépôt, onglet **Settings** (Paramètres) ;
+2. menu de gauche : **Secrets and variables**, puis **Actions** ;
+3. bouton vert **New repository secret** ;
+4. **Name** : le nom exact du secret (voir le tableau ci-dessous). **Secret** : la valeur ;
+5. **Add secret**.
+
+Pour changer une valeur : clique sur le crayon à côté du secret existant.
+
+| Nom du secret | À quoi il sert | Depuis l'étape |
+|---|---|---|
+| `FT_CLIENT_ID` | Identifiant de l'application France Travail | 1 |
+| `FT_CLIENT_SECRET` | Clé secrète de l'application France Travail | 1 |
+| `MOT_DE_PASSE_SITE` | Mot de passe du site (chiffre les données) | 1 |
+
+⚠️ Si tu changes `MOT_DE_PASSE_SITE`, les données déjà enregistrées ne pourront plus
+être lues. Il faudra supprimer `docs/data/offres.chiffre.json` pour repartir de zéro.
+
+---
+
+## Ce qui est public et ce qui ne l'est pas
+
+Le dépôt est public, ce qui est nécessaire pour GitHub Pages gratuit. **Tout le monde
+peut voir** :
+- le code du programme et du site ;
+- le fichier de réglages `config/criteres.yaml` (donc tes postes cibles et tes mots-clés) ;
+- `docs/data/statut.json` : la date de la dernière collecte, et pour chaque source si elle a
+  fonctionné et combien d'offres elle a trouvées ;
+- le fichier des offres, **mais chiffré** : sans le mot de passe, il est illisible.
+
+**Ne sont jamais publiés** : tes clés d'API, ton mot de passe, ton CV (étape 7, rangé
+dans les secrets) et tes notes de candidature.
+
+---
+
+## Sources
+
+| Source | Méthode | Statut |
+|---|---|---|
+| France Travail | API officielle « Offres d'emploi v2 » | ✅ étape 1 |
+| Adzuna | API | étape 2 |
+| Jooble | API | étape 2 |
+| APEC, LinkedIn, Welcome to the Jungle… | Alertes e-mail lues dans une boîte Gmail dédiée | étape 4 |
+
+Les offres France Travail affichent leur source, leur date de mise à jour et un lien
+vers l'offre d'origine, comme le demandent les conditions de réutilisation de France Travail.
+
+### Codes ROME
+
+Chaque collecte liste dans son compte rendu les codes métiers ROME présents dans les
+offres trouvées par mots-clés. Ces codes viennent directement de France Travail. On
+s'en sert pour remplir `codes_rome` dans `config/criteres.yaml`.
+
+---
+
+## Organisation du dépôt
+
+```
+.github/workflows/   les automatismes GitHub (collecte, publication, tests)
+collecte/            le programme Python de collecte
+config/              tes réglages (criteres.yaml)
+docs/                le site web (index.html, style.css, app.js)
+docs/data/           les données publiées (chiffrées) et le statut des sources
+tests/               les vérifications automatiques du programme
+```

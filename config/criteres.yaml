@@ -1,0 +1,49 @@
+# =====================================================================
+#  RÉGLAGES DE LA VEILLE EMPLOI
+# ---------------------------------------------------------------------
+#  Tu peux modifier ce fichier directement sur GitHub (icône crayon).
+#  Règles d'écriture :
+#   - les lignes qui commencent par « # » sont des commentaires ;
+#   - garde bien les espaces au début des lignes (l'alignement compte) ;
+#   - une liste s'écrit avec un tiret « - » par ligne.
+#  Les changements sont pris en compte à la collecte suivante.
+# =====================================================================
+
+recherche:
+  # Code INSEE de la commune de référence (44109 = Nantes).
+  commune_insee: "44109"
+  # Rayon autour de la commune, en kilomètres.
+  rayon_km: 30
+
+  # Mots-clés envoyés aux sources d'offres (une recherche par ligne).
+  mots_cles:
+    - product owner
+    - proxy product owner
+    - chef de projet digital
+    - chef de projet informatique
+    - chef de projet MOA
+    - business analyst
+    - AMOA
+    - assistance maîtrise d'ouvrage
+    - product manager
+    - UX researcher
+    - ergonome
+    - UX designer
+
+  # Codes métiers ROME de France Travail.
+  # Ils sont vérifiés auprès de France Travail : le compte rendu de chaque
+  # collecte liste les codes ROME des offres trouvées par mots-clés.
+  codes_rome: []
+
+  # Offres en télétravail complet ailleurs en France.
+  teletravail_france:
+    actif: true
+    # Mots-clés recherchés dans toute la France (on ne garde ensuite
+    # que les offres qui annoncent un télétravail complet).
+    mots_cles:
+      - product owner
+      - business analyst
+      - product manager
+      - UX researcher
+    # Ancienneté maximale des offres, en jours (1, 3, 7, 14 ou 31).
+    publiees_depuis_jours: 31

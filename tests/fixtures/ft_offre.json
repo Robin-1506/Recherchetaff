@@ -1,0 +1,16 @@
+{
+  "id": "123ABCD",
+  "intitule": "Product Owner H/F",
+  "description": "Au sein de l'équipe digitale, vous animez le backlog et le recueil des besoins. Télétravail 2 jours par semaine.",
+  "dateCreation": "2026-10-10T08:00:00.000Z",
+  "dateActualisation": "2026-10-15T09:30:00.000Z",
+  "lieuTravail": {"libelle": "44 - NANTES", "codePostal": "44000"},
+  "romeCode": "M1806",
+  "romeLibelle": "Conseil et maîtrise d'ouvrage en systèmes d'information",
+  "entreprise": {"nom": "ACME Numérique"},
+  "typeContrat": "CDI",
+  "typeContratLibelle": "Contrat à durée indéterminée",
+  "natureContrat": "Contrat travail",
+  "salaire": {"libelle": "Annuel de 45000.0 Euros à 52000.0 Euros"},
+  "origineOffre": {"origine": "1", "urlOrigine": "https://candidat.francetravail.fr/offres/recherche/detail/123ABCD"}
+}

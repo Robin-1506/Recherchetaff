@@ -1,0 +1,12 @@
+# Fichiers à ne JAMAIS publier
+cv*.txt
+cv*.pdf
+cv*.docx
+*.secret
+.env
+
+# Fichiers techniques
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
