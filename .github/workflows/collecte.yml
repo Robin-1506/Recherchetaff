@@ -70,8 +70,15 @@ jobs:
             echo "Rien à enregistrer."
           else
             git commit -m "Collecte du $(TZ=Europe/Paris date +'%d/%m/%Y')"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            # Le site peut enregistrer le suivi pendant la collecte : on réessaie.
+            for essai in 1 2 3; do
+              if git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Impossible d'enregistrer les données après 3 essais." >&2
+            exit 1
           fi
 
   publication:

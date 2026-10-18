@@ -27,12 +27,20 @@
     <header class="entete">
       <div class="entete-ligne">
         <h1>Veille emploi Nantes</h1>
-        <button id="verrouiller" class="bouton-discret" type="button" title="Oublier le mot de passe sur cet appareil">Verrouiller</button>
+        <div class="entete-boutons">
+          <button id="bouton-synchro" class="bouton-discret" type="button" title="Synchronisation du suivi">Synchro</button>
+          <button id="verrouiller" class="bouton-discret" type="button" title="Oublier le mot de passe sur cet appareil">Verrouiller</button>
+        </div>
       </div>
       <p id="info-collecte" class="discret"></p>
       <div id="alertes-sources"></div>
+      <nav class="onglets" aria-label="Vues">
+        <button type="button" class="onglet actif" data-vue="offres">Offres</button>
+        <button type="button" class="onglet" data-vue="suivi">Suivi <span id="nb-suivi" class="pastille" hidden></span></button>
+      </nav>
     </header>
 
+    <section id="vue-offres">
     <section class="filtres" aria-label="Filtres">
       <input id="f-texte" type="search" placeholder="Rechercher (titre, entreprise, ville…)" aria-label="Rechercher">
       <div class="filtres-ligne">
@@ -63,6 +71,8 @@
       </div>
       <div class="filtres-ligne">
         <label class="case"><input id="f-nouvelles" type="checkbox"> Nouvelles seulement</label>
+        <label class="case"><input id="f-interessantes" type="checkbox"> Intéressantes seulement</label>
+        <label class="case"><input id="f-ignorees" type="checkbox"> Afficher les ignorées</label>
         <label class="case"><input id="f-expirees" type="checkbox"> Afficher les expirées</label>
       </div>
       </details>
@@ -70,6 +80,19 @@
 
     <p id="compteur" class="compteur" aria-live="polite"></p>
     <ul id="liste" class="liste"></ul>
+    </section>
+
+    <!-- Suivi des candidatures -->
+    <section id="vue-suivi" hidden>
+      <div class="suivi-barre">
+        <button id="nouvelle-candidature" class="bouton-principal" type="button">+ Nouvelle candidature</button>
+        <button id="exporter-suivi" class="bouton-discret" type="button">Exporter</button>
+        <label class="bouton-discret importer">Importer<input id="importer-suivi" type="file" accept="application/json" hidden></label>
+      </div>
+      <p id="etat-synchro" class="discret" aria-live="polite"></p>
+      <div id="a-relancer"></div>
+      <div id="kanban" class="kanban"></div>
+    </section>
   </div>
 
   <!-- Fiche détaillée -->
@@ -79,6 +102,11 @@
       <h2 id="fiche-titre"></h2>
       <p id="fiche-sous-titre" class="discret"></p>
       <div id="fiche-badges" class="badges"></div>
+      <div class="fiche-actions">
+        <button id="b-interessant" type="button" class="bouton-discret">☆ Intéressante</button>
+        <button id="b-ignorer" type="button" class="bouton-discret">Ignorer</button>
+        <button id="b-suivre" type="button" class="bouton-principal">Ajouter au suivi</button>
+      </div>
       <dl id="fiche-infos" class="infos"></dl>
       <details id="fiche-score" class="detail-score">
         <summary></summary>
@@ -90,6 +118,46 @@
     </div>
   </dialog>
 
+  <!-- Fiche de candidature -->
+  <dialog id="candidature" class="fiche" aria-labelledby="candidature-titre">
+    <form id="form-candidature" class="fiche-contenu formulaire" method="dialog">
+      <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
+      <h2 id="candidature-titre">Candidature</h2>
+      <label>Poste <input name="titre" required></label>
+      <label>Entreprise <input name="entreprise"></label>
+      <label>Lien de l'offre <input name="lien" type="url" placeholder="https://…"></label>
+      <label>Étape <select name="colonne"></select></label>
+      <div class="deux-colonnes">
+        <label>Date de candidature <input name="date_candidature" type="date"></label>
+        <label>Relance prévue <input name="relance" type="date"></label>
+      </div>
+      <label>Contact <input name="contact" placeholder="Nom, e-mail, téléphone…"></label>
+      <label>Notes <textarea name="notes" rows="5"></textarea></label>
+      <div class="fiche-actions">
+        <button type="submit" class="bouton-principal">Enregistrer</button>
+        <button id="b-relance-faite" type="button" class="bouton-discret">Relancé aujourd'hui</button>
+        <button id="b-supprimer-candidature" type="button" class="bouton-discret danger">Supprimer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Réglages de synchronisation -->
+  <dialog id="reglages-synchro" class="fiche" aria-labelledby="synchro-titre">
+    <form id="form-synchro" class="fiche-contenu formulaire" method="dialog">
+      <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
+      <h2 id="synchro-titre">Synchronisation du suivi</h2>
+      <p class="discret">Ton suivi est enregistré, chiffré avec ton mot de passe, dans le dépôt GitHub.
+        Pour que cet appareil puisse l'y enregistrer, colle ici ton jeton GitHub. Il reste sur cet appareil.</p>
+      <label>Jeton GitHub <input id="jeton" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+      <p id="synchro-message" class="discret" aria-live="polite"></p>
+      <div class="fiche-actions">
+        <button type="submit" class="bouton-principal">Enregistrer et synchroniser</button>
+        <button id="oublier-jeton" type="button" class="bouton-discret danger">Oublier le jeton</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
+  <script src="suivi.js"></script>
 </body>
 </html>

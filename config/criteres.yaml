@@ -72,6 +72,11 @@ alertes_email:
   # Une offre vue seulement dans les alertes est considérée comme retirée
   # si aucun e-mail ne l'a mentionnée depuis ce nombre de jours.
   jours_avant_expiration: 21
+  # E-mails ignorés (ni analysés ni mentionnés dans le compte rendu) :
+  # domaines d'expéditeurs qui n'envoient jamais d'offres.
+  expediteurs_ignores:
+    - google.com
+    - accounts.google.com
   # Pour chaque site : « motif_lien » reconnaît l'adresse d'un lien d'offre
   # (le morceau (?P<id>…) en extrait l'identifiant) ; « url_offre » donne le
   # lien propre, sans suivi publicitaire, affiché sur le site.
