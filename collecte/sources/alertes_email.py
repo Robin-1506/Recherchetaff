@@ -310,13 +310,16 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
             raise SourceNonConfiguree("non configurée (secrets GMAIL_ADRESSE / GMAIL_MOT_DE_PASSE_APPLI absents)")
         messages = lire_boite(adresse, mot_de_passe, reglages.get("jours_relus", 7))
 
+    ignores = {d.lower() for d in reglages.get("expediteurs_ignores", [])}
     offres: dict[str, dict] = {}
-    details = ["", f"### Alertes e-mail : {len(messages)} e-mails lus", ""]
+    details = []
     for brut in messages:
         try:
             extraites, diag = analyser_message(brut, sites)
         except Exception as e:  # un e-mail illisible ne bloque pas les autres
             log.warning("E-mail illisible : %s", e)
+            continue
+        if diag["expediteur"] in ignores:
             continue
         for o in extraites:
             offres.setdefault(o["id"], o)
@@ -325,6 +328,7 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
             ligne += " — aucun lien d'offre reconnu ; liens présents : " + ", ".join(f"`{f}`" for f in diag["formes"])
         details.append(ligne)
 
+    details = ["", f"### Alertes e-mail : {len(details)} e-mails analysés", ""] + details
     return {
         "offres": list(offres.values()),
         "avertissements": [],

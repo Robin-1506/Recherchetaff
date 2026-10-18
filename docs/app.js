@@ -12,7 +12,7 @@ const CLE_MDP = "veille.motDePasse";
 const CLE_VISITE = "veille.derniereVisite";
 const CLE_REFERENCE = "veille.referenceNouveautes";
 
-const etat = { offres: [], categories: [], reference: null };
+const etat = { offres: [], categories: [], reference: null, motDePasse: null };
 
 // --- Petits utilitaires ----------------------------------------------------
 
@@ -63,19 +63,43 @@ function sansAccents(t) {
   return (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-// --- Déchiffrement -----------------------------------------------------------
+// --- Chiffrement (même format que collecte/chiffrement.py) -------------------
+
+const ITERATIONS = 250000;
+const octets = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const base64 = (tab) => btoa(Array.from(new Uint8Array(tab), (c) => String.fromCharCode(c)).join(""));
+const clesDerivees = new Map(); // la dérivation est lente : une seule fois par sel
+
+async function deriverCle(motDePasse, sel, iterations) {
+  const id = `${sel}:${iterations}:${motDePasse}`;
+  if (!clesDerivees.has(id)) {
+    const base = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(motDePasse), "PBKDF2", false, ["deriveKey"]);
+    clesDerivees.set(id, await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt: octets(sel), iterations, hash: "SHA-256" },
+      base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]));
+  }
+  return clesDerivees.get(id);
+}
 
 async function dechiffrer(enveloppe, motDePasse) {
-  const octets = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  const base = await crypto.subtle.importKey(
-    "raw", new TextEncoder().encode(motDePasse), "PBKDF2", false, ["deriveKey"]);
-  const cle = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: octets(enveloppe.sel), iterations: enveloppe.iterations, hash: "SHA-256" },
-    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  const cle = await deriverCle(motDePasse, enveloppe.sel, enveloppe.iterations);
   const clair = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: octets(enveloppe.iv) }, cle, octets(enveloppe.donnees));
   const flux = new Blob([clair]).stream().pipeThrough(new DecompressionStream("gzip"));
   return JSON.parse(await new Response(flux).text());
+}
+
+// `sel` : on réutilise celui du fichier existant pour éviter de redériver la
+// clé à chaque enregistrement (le vecteur d'initialisation, lui, change toujours).
+async function chiffrer(donnees, motDePasse, sel = null) {
+  sel = sel || base64(crypto.getRandomValues(new Uint8Array(16)));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const flux = new Blob([JSON.stringify(donnees)]).stream().pipeThrough(new CompressionStream("gzip"));
+  const compresse = await new Response(flux).arrayBuffer();
+  const cle = await deriverCle(motDePasse, sel, ITERATIONS);
+  const chiffre = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cle, compresse);
+  return { format: "veille-emploi-v1", kdf: "PBKDF2-SHA256", iterations: ITERATIONS, sel, iv: base64(iv), donnees: base64(chiffre) };
 }
 
 async function chargerJSON(chemin) {
@@ -99,6 +123,7 @@ async function demarrer(motDePasse, memoriser) {
   }
   if (memoriser) local.ecrire(CLE_MDP, motDePasse);
   session.ecrire(CLE_MDP, motDePasse);
+  etat.motDePasse = motDePasse;
 
   // « Nouvelles depuis la dernière visite » : la référence est figée pour
   // toute la session (un rechargement de page ne fait pas disparaître les badges).
@@ -116,7 +141,8 @@ async function demarrer(motDePasse, memoriser) {
   $("app").hidden = false;
   afficherStatut(await chargerJSON(FICHIER_STATUT).catch(() => null), !enveloppe);
   remplirFiltres();
-  afficherListe();
+  Suivi.demarrer();
+  afficherVue(session.lire("veille.vue") || "offres");
 }
 
 function afficherStatut(statut, aucuneDonnee) {
@@ -168,8 +194,12 @@ function offresFiltrees() {
   const source = $("f-source").value;
   const nouvelles = $("f-nouvelles").checked;
   const expirees = $("f-expirees").checked;
+  const interessantes = $("f-interessantes").checked;
+  const ignorees = $("f-ignorees").checked;
   return etat.offres
     .filter((o) => expirees || !o.expiree)
+    .filter((o) => ignorees || Suivi.statutOffre(o.id) !== "ignore")
+    .filter((o) => !interessantes || Suivi.statutOffre(o.id) === "interessant")
     .filter((o) => categorie === "*" || (categorie ? o.categorie === categorie : o.categorie !== HORS_CIBLE))
     .filter((o) => !contrat || o.contrat === contrat)
     .filter((o) => !tele || (tele === "aucun" ? !o.teletravail : o.teletravail === tele))
@@ -187,7 +217,12 @@ function classeScore(score) {
 }
 
 function badges(o) {
+  const statut = Suivi.statutOffre(o.id);
+  const candidature = Suivi.candidaturePourOffre(o.id);
   return [
+    statut === "interessant" && el("span", { class: "badge etoile" }, "★ Intéressante"),
+    statut === "ignore" && el("span", { class: "badge" }, "Ignorée"),
+    candidature && el("span", { class: "badge suivi" }, `Suivi : ${Suivi.nomColonne(candidature.colonne)}`),
     typeof o.score === "number" && el("span", { class: `badge score ${classeScore(o.score)}`, title: "Score de pertinence" }, `${o.score}/100`),
     o.categorie && el("span", { class: "badge" + (o.categorie === HORS_CIBLE ? " attention" : " categorie") }, o.categorie),
     estNouvelle(o) && !o.expiree && el("span", { class: "badge nouveau" }, "Nouvelle"),
@@ -250,8 +285,22 @@ function ouvrirFiche(o) {
   }));
 
   $("fiche-description").textContent = o.description || "Description non disponible.";
+  etat.offreOuverte = o;
+  actualiserActionsFiche();
   $("fiche").showModal();
   $("fiche").scrollTop = 0;
+}
+
+function actualiserActionsFiche() {
+  const o = etat.offreOuverte;
+  if (!o) return;
+  const statut = Suivi.statutOffre(o.id);
+  const candidature = Suivi.candidaturePourOffre(o.id);
+  $("b-interessant").textContent = statut === "interessant" ? "★ Intéressante" : "☆ Intéressante";
+  $("b-interessant").classList.toggle("actif", statut === "interessant");
+  $("b-ignorer").textContent = statut === "ignore" ? "Ne plus ignorer" : "Ignorer";
+  $("b-suivre").textContent = candidature ? `Voir dans le suivi (${Suivi.nomColonne(candidature.colonne)})` : "Ajouter au suivi";
+  $("fiche-badges").replaceChildren(...badges(o));
 }
 
 // --- Branchements ------------------------------------------------------------
@@ -278,14 +327,54 @@ function brancher() {
     location.reload();
   });
 
-  for (const id of ["f-categorie", "f-tri", "f-texte", "f-contrat", "f-teletravail", "f-source", "f-nouvelles", "f-expirees"]) {
+  for (const id of ["f-categorie", "f-tri", "f-texte", "f-contrat", "f-teletravail", "f-source", "f-nouvelles",
+                    "f-interessantes", "f-ignorees", "f-expirees"]) {
     $(id).addEventListener("input", afficherListe);
   }
 
-  const fiche = $("fiche");
-  fiche.addEventListener("click", (e) => {
-    if (e.target === fiche || e.target.closest("[data-fermer]")) fiche.close();
+  // Fenêtres : fermeture par la croix ou en cliquant à côté.
+  for (const fenetre of document.querySelectorAll("dialog")) {
+    fenetre.addEventListener("click", (e) => {
+      if (e.target === fenetre || e.target.closest("[data-fermer]")) fenetre.close();
+    });
+  }
+
+  $("b-interessant").addEventListener("click", () => {
+    const o = etat.offreOuverte;
+    Suivi.definirStatutOffre(o.id, Suivi.statutOffre(o.id) === "interessant" ? null : "interessant");
+    actualiserActionsFiche();
+    afficherListe();
   });
+  $("b-ignorer").addEventListener("click", () => {
+    const o = etat.offreOuverte;
+    const ignorer = Suivi.statutOffre(o.id) !== "ignore";
+    Suivi.definirStatutOffre(o.id, ignorer ? "ignore" : null);
+    afficherListe();
+    if (ignorer) $("fiche").close();
+    else actualiserActionsFiche();
+  });
+  $("b-suivre").addEventListener("click", () => {
+    const o = etat.offreOuverte;
+    const candidature = Suivi.candidaturePourOffre(o.id) || Suivi.creerDepuisOffre(o);
+    $("fiche").close();
+    afficherVue("suivi");
+    Suivi.ouvrirCandidature(candidature.id);
+  });
+
+  for (const onglet of document.querySelectorAll(".onglet")) {
+    onglet.addEventListener("click", () => afficherVue(onglet.dataset.vue));
+  }
+}
+
+function afficherVue(vue) {
+  $("vue-offres").hidden = vue !== "offres";
+  $("vue-suivi").hidden = vue !== "suivi";
+  for (const onglet of document.querySelectorAll(".onglet")) {
+    onglet.classList.toggle("actif", onglet.dataset.vue === vue);
+  }
+  if (vue === "suivi") Suivi.afficher();
+  else afficherListe();
+  session.ecrire("veille.vue", vue);
 }
 
 async function init() {
@@ -309,4 +398,5 @@ async function init() {
   $("mdp").focus();
 }
 
-init();
+// Lancé une fois tous les scripts chargés (suivi.js compris).
+document.addEventListener("DOMContentLoaded", init);

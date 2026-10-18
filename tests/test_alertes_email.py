@@ -96,3 +96,9 @@ def test_non_configuree(monkeypatch):
     import pytest
     with pytest.raises(ae.SourceNonConfiguree):
         ae.collecter(CONFIG)
+
+
+def test_expediteurs_ignores():
+    res = ae.collecter(CONFIG, messages=[message(LINKEDIN, expediteur="no-reply@accounts.google.com")])
+    assert res["offres"] == []
+    assert not any("google" in ligne for ligne in res["details"])

@@ -4,9 +4,9 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 4 sur 7.** Sources France Travail, Adzuna, Jooble et
-> alertes e-mail, fusion des doublons, score par poste cible, site web. Les
-> étapes à venir ajouteront le suivi des candidatures, le récap quotidien et
+> **État actuel : étape 5 sur 7.** Sources France Travail, Adzuna, Jooble et
+> alertes e-mail, fusion des doublons, score par poste cible, suivi des
+> candidatures, site web. Les étapes à venir ajouteront le récap quotidien et
 > l'analyse IA.
 
 ---
@@ -54,6 +54,34 @@ Quelques règles d'écriture :
 
 Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajoute une ligne
 `    - scrum master` dans la liste `mots_cles` (avec 4 espaces avant le tiret, comme les autres).
+
+---
+
+## Suivi des candidatures
+
+- Dans la fiche d'une offre : **☆ Intéressante** (étoile), **Ignorer** (l'offre disparaît de la
+  liste ; « Afficher les ignorées » dans « Plus de filtres » pour la retrouver) et **Ajouter au suivi**.
+- L'onglet **Suivi** présente tes candidatures en colonnes : À postuler → Postulé → Entretien →
+  Offre / Refus. Les flèches ← → font changer d'étape ; un clic sur une carte ouvre sa fiche
+  (date, contact, notes, relance). « + Nouvelle candidature » sert pour une offre trouvée ailleurs.
+- En passant à « Postulé », la date de candidature est remplie et une **relance est proposée
+  à J+7** (modifiable). Le bouton « Relancé aujourd'hui » note la relance et en propose une
+  nouvelle 7 jours plus tard. Les candidatures à relancer sont signalées par ⏰.
+
+### Où sont stockées ces informations ?
+
+Dans `docs/data/suivi.chiffre.json`, **chiffré avec le mot de passe du site** : le fichier est
+public mais illisible sans le mot de passe. Le site l'enregistre directement dans le dépôt
+grâce à un **jeton GitHub** saisi une fois par appareil (bouton « Synchro »). Ainsi :
+- téléphone et ordinateur partagent le même suivi (mis à jour à l'ouverture de la page) ;
+- le récap du matin pourra te rappeler les relances du jour ;
+- sans jeton, un appareil peut consulter le suivi mais ses modifications restent sur lui.
+
+Une copie reste aussi dans chaque navigateur, et le bouton **Exporter** télécharge une
+sauvegarde (à réimporter avec **Importer** si besoin).
+
+**Le jeton** ne permet que de modifier ce dépôt. S'il expire ou si un appareil est perdu :
+supprime-le sur GitHub (Settings → Developer settings → Personal access tokens) et crée-en un nouveau.
 
 ---
 
