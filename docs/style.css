@@ -11,6 +11,9 @@
   --alerte: #a33a12;
   --alerte-fond: #fdeee6;
   --badge-fond: #eef1f6;
+  --moyen: #8a5a00;
+  --moyen-fond: #fdf3dc;
+  --categorie-fond: #e8eefc;
   --rayon: 10px;
 }
 
@@ -28,6 +31,9 @@
     --alerte: #ffb08a;
     --alerte-fond: #3a2118;
     --badge-fond: #262d39;
+    --moyen: #f2c56b;
+    --moyen-fond: #3a2f14;
+    --categorie-fond: #1f2a45;
   }
 }
 
@@ -103,7 +109,11 @@ input[type="password"], input[type="search"], select {
 
 .filtres { display: grid; gap: 8px; margin: 16px 0 8px; }
 .filtres-ligne { display: flex; flex-wrap: wrap; gap: 8px 16px; }
-.filtres-ligne select { flex: 1 1 160px; width: auto; }
+.filtres-ligne select { flex: 1 1 140px; width: auto; min-width: 0; }
+.plus-filtres { display: grid; gap: 8px; }
+.plus-filtres[open] summary { margin-bottom: 8px; }
+.plus-filtres summary { cursor: pointer; color: var(--accent); font-size: .92rem; }
+.plus-filtres .filtres-ligne + .filtres-ligne { margin-top: 8px; }
 
 .compteur { color: var(--discret); font-size: .9rem; margin: 8px 0; }
 
@@ -129,6 +139,10 @@ input[type="password"], input[type="search"], select {
   color: var(--texte);
   white-space: nowrap;
 }
+.badge.score { font-weight: 700; }
+.badge.score.fort { background: var(--nouveau-fond); color: var(--nouveau); }
+.badge.score.moyen { background: var(--moyen-fond); color: var(--moyen); }
+.badge.categorie { background: var(--categorie-fond); color: var(--accent); }
 .badge.nouveau { background: var(--nouveau-fond); color: var(--nouveau); font-weight: 600; }
 .badge.attention { background: var(--alerte-fond); color: var(--alerte); }
 
@@ -165,6 +179,9 @@ input[type="password"], input[type="search"], select {
 }
 .lien-source small { display: block; color: var(--discret); }
 .description { white-space: pre-line; font-size: .95rem; }
+.detail-score { margin: 0 0 14px; font-size: .92rem; }
+.detail-score summary { cursor: pointer; color: var(--accent); }
+.detail-score ul { margin: 8px 0 0; padding-left: 20px; color: var(--discret); }
 
 @media (max-width: 600px) {
   #app { padding: 12px 16px; }

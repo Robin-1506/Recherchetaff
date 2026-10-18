@@ -4,9 +4,10 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 2 sur 7.** Sources France Travail, Adzuna et Jooble,
-> fusion des doublons, site web. Les étapes à venir ajouteront le score, les
-> alertes e-mail, le suivi des candidatures, le récap quotidien et l'analyse IA.
+> **État actuel : étape 3 sur 7.** Sources France Travail, Adzuna et Jooble,
+> fusion des doublons, score par poste cible, site web. Les étapes à venir
+> ajouteront les alertes e-mail, le suivi des candidatures, le récap quotidien
+> et l'analyse IA.
 
 ---
 
@@ -53,6 +54,33 @@ Quelques règles d'écriture :
 
 Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajoute une ligne
 `    - scrum master` dans la liste `mots_cles` (avec 4 espaces avant le tiret, comme les autres).
+
+---
+
+## Comprendre et régler le score
+
+Chaque offre reçoit une **catégorie** (l'un de tes 5 postes cibles, ou « Hors cible ») et
+un **score sur 100**, calculé ainsi :
+
+| Élément | Points (réglages actuels) |
+|---|---|
+| Poste cible trouvé dans le titre | Product Owner 50, Chef de projet 42, Business Analyst / AMOA 38, Product Manager 34, UX Researcher / Ergonome 28 |
+| …trouvé seulement dans la description | 40 % des points ci-dessus |
+| Mots-clés bonus (agile, backlog, UX, recueil des besoins…) | de 2 à 6 points chacun, 25 au maximum |
+| Lieu | zone de Nantes 15, télétravail complet ailleurs 10 |
+| Contrat | CDI 15, CDD 10, non précisé 6, freelance ou intérim 3 |
+
+Les offres dont le **titre** contient une expression d'exclusion (stage, alternance,
+développeur, commercial, santé au travail…) sont classées « Hors cible » et leur score
+est divisé par 5. Sur le site, elles sont masquées par défaut : choisis « Toutes les
+offres » ou « Hors cible » dans la liste des postes pour les voir. Les missions en ESN
+ou en cabinet sont **signalées** par un badge, mais pas exclues.
+
+Dans chaque fiche, « Pourquoi … /100 ? » détaille le calcul.
+
+Tout se règle dans la section `score:` de `config/criteres.yaml` : ajouter un intitulé à
+un poste, changer des points, ajouter un mot-clé bonus (`mot: points`) ou une exclusion.
+Le nouveau calcul s'applique à toutes les offres, même anciennes, dès la collecte suivante.
 
 ---
 
