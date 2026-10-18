@@ -10,7 +10,8 @@
 # =====================================================================
 
 recherche:
-  # Code INSEE de la commune de référence (44109 = Nantes).
+  # Commune de référence : nom (Adzuna, Jooble) et code INSEE (France Travail).
+  ville: Nantes
   commune_insee: "44109"
   # Rayon autour de la commune, en kilomètres.
   rayon_km: 30

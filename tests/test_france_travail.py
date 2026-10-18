@@ -41,6 +41,7 @@ def client(reponses):
 
 CONFIG = {
     "recherche": {
+        "ville": "Nantes",
         "commune_insee": "44109",
         "rayon_km": 30,
         "mots_cles": ["product owner", "business analyst"],

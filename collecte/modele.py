@@ -13,6 +13,7 @@ Une offre est un simple dictionnaire :
     sources          liste de {"nom", "id", "url", "date_maj", "active"}
 """
 
+import html
 import re
 import unicodedata
 
@@ -51,3 +52,47 @@ def tronquer(texte: str | None, longueur: int = LONGUEUR_MAX_DESCRIPTION) -> str
     if len(texte) <= longueur:
         return texte
     return texte[:longueur].rstrip() + "…"
+
+
+def nettoyer_html(texte: str | None) -> str:
+    """Retire les balises HTML (<b>, <br>…) et décode les entités (&amp;…)."""
+    if not texte:
+        return ""
+    texte = re.sub(r"<br\s*/?>|</p>|</li>", "\n", texte, flags=re.IGNORECASE)
+    texte = re.sub(r"<[^>]+>", "", texte)
+    texte = html.unescape(texte).replace("\xa0", " ")
+    return re.sub(r"[ \t]+", " ", texte).strip()
+
+
+_CONTRAT_DANS_TEXTE = [
+    ("Stage", re.compile(r"\bstages?\b|\bstagiaire|\binternship", re.IGNORECASE)),
+    ("Alternance", re.compile(r"alternan|apprenti|contrat pro", re.IGNORECASE)),
+    ("Freelance", re.compile(r"free[\s-]?lance|ind[ée]pendant|portage", re.IGNORECASE)),
+    ("Intérim", re.compile(r"int[ée]rim", re.IGNORECASE)),
+    ("CDD", re.compile(r"\bCDD\b|dur[ée]e d[ée]termin[ée]e", re.IGNORECASE)),
+    ("CDI", re.compile(r"\bCDI\b|dur[ée]e ind[ée]termin[ée]e", re.IGNORECASE)),
+]
+
+
+def detecter_contrat(*textes: str | None) -> str | None:
+    """Devine le type de contrat à partir d'un texte (intitulé, type…)."""
+    texte = " ".join(t for t in textes if t)
+    for contrat, motif in _CONTRAT_DANS_TEXTE:
+        if motif.search(texte):
+            return contrat
+    return None
+
+
+_MOTS_IGNORES_TITRE = {"h", "f", "x", "m", "hf", "fh", "hfx", "e", "le", "la", "les", "un", "une", "des", "du", "de", "d"}
+_MOTS_IGNORES_ENTREPRISE = {"sas", "sa", "sarl", "sasu", "eurl", "sci", "groupe", "group", "france", "the", "et", "and"}
+
+
+def empreinte(offre: dict) -> str | None:
+    """Identifie une même offre publiée sur plusieurs sites : intitulé et
+    entreprise simplifiés (sans « H/F », formes juridiques, accents…).
+    Renvoie None si l'entreprise est inconnue (fusion trop hasardeuse)."""
+    titre = [m for m in normaliser_texte(offre.get("titre")).split() if m not in _MOTS_IGNORES_TITRE]
+    entreprise = [m for m in normaliser_texte(offre.get("entreprise")).split() if m not in _MOTS_IGNORES_ENTREPRISE]
+    if not titre or not entreprise:
+        return None
+    return " ".join(titre) + " | " + " ".join(entreprise)

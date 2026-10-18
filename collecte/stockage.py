@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .chiffrement import chiffrer, dechiffrer
+from .modele import empreinte
 
 JOURS_AVANT_ALLEGEMENT = 30
 
@@ -35,58 +36,118 @@ def enregistrer(chemin: Path, donnees: dict, mot_de_passe: str, precedentes: dic
     return True
 
 
-def integrer(donnees: dict, cle_source: str, nom_source: str, nouvelles: list[dict], maintenant: str,
-             complet: bool, encore_en_ligne=None) -> dict:
+def _cle_source(source: dict) -> tuple[str, str]:
+    return (source["nom"], str(source["id"]))
+
+
+def integrer(donnees: dict, nom_source: str, nouvelles: list[dict], maintenant: str, complet: bool,
+             encore_en_ligne=None, delai_jours: int | None = None) -> dict:
     """Intègre les offres d'une source dans les données existantes.
 
-    - nouvelle offre : ajoutée avec premiere_vue = maintenant ;
-    - offre déjà connue : mise à jour ;
-    - offre connue de cette source mais absente aujourd'hui : si la collecte
-      est complète, on demande à `encore_en_ligne(ids)` (facultatif) lesquelles
-      existent encore ; les autres sont marquées inactives pour cette source.
-      Une offre dont toutes les sources sont inactives devient « expirée ».
-    Renvoie un petit bilan {"nouvelles": n, "expirees": n}.
+    Pour chaque offre reçue, on cherche si elle est déjà connue :
+      1. par son identifiant chez cette source ;
+      2. sinon par son « empreinte » (même intitulé, même entreprise) : c'est
+         alors un doublon venu d'une autre source, on ajoute simplement le lien.
+    Sinon, c'est une nouvelle offre (premiere_vue = maintenant).
+
+    Offres de cette source absentes aujourd'hui (seulement si la collecte est
+    complète) : le lien de cette source devient inactif
+      - si `encore_en_ligne(ids)` ne les renvoie pas (vérification une à une), ou
+      - si elles n'ont pas été revues depuis `delai_jours` jours.
+    Une offre dont tous les liens sont inactifs devient « expirée ».
+    Renvoie un petit bilan {"nouvelles", "doublons", "expirees"}.
     """
-    par_id = {o["id"]: o for o in donnees["offres"]}
+    par_source = {}
+    par_empreinte = {}
+    for o in donnees["offres"]:
+        for s in o.get("sources", []):
+            par_source[_cle_source(s)] = o
+        e = empreinte(o)
+        if e and (e not in par_empreinte or par_empreinte[e].get("expiree")):
+            par_empreinte[e] = o
+
+    jour = maintenant[:10]
     vues = set()
-    bilan = {"nouvelles": 0, "expirees": 0}
+    bilan = {"nouvelles": 0, "doublons": 0, "expirees": 0}
 
     for offre in nouvelles:
-        vues.add(offre["id"])
-        existante = par_id.get(offre["id"])
+        source = {**offre["sources"][0], "active": True}
+        if delai_jours is not None:
+            source["vue_le"] = jour
+        vues.add(_cle_source(source))
+        existante = par_source.get(_cle_source(source))
         if existante is None:
-            offre = {**offre, "premiere_vue": maintenant, "expiree": False,
+            e = empreinte(offre)
+            existante = par_empreinte.get(e) if e else None
+            if existante is not None:
+                bilan["doublons"] += 1
+        if existante is None:
+            offre = {**offre, "sources": [source], "premiere_vue": maintenant, "expiree": False,
                      "date_expiration": None}
             donnees["offres"].append(offre)
-            par_id[offre["id"]] = offre
             bilan["nouvelles"] += 1
-            continue
-        conserves = {k: existante.get(k) for k in ("premiere_vue",)}
-        autres_sources = [s for s in existante.get("sources", []) if s["nom"] != nom_source]
-        existante.update(offre)
-        existante.update(conserves)
-        existante["sources"] = autres_sources + offre["sources"]
-        existante["expiree"] = False
-        existante["date_expiration"] = None
+        else:
+            _fusionner(existante, offre, source)
+            offre = existante
+        par_source[_cle_source(source)] = offre
+        e = empreinte(offre)
+        if e:
+            par_empreinte[e] = offre
 
     if complet:
-        absentes = [
-            o for o in donnees["offres"]
-            if o["id"] not in vues and not o.get("expiree")
-            and any(s["nom"] == nom_source and s.get("active", True) for s in o.get("sources", []))
-        ]
-        ids_source = [s["id"] for o in absentes for s in o["sources"] if s["nom"] == nom_source]
-        toujours = encore_en_ligne(ids_source) if (encore_en_ligne and ids_source) else set()
-        for o in absentes:
-            for s in o["sources"]:
-                if s["nom"] == nom_source and s["id"] not in toujours:
-                    s["active"] = False
-            if not any(s.get("active", True) for s in o["sources"]):
+        toujours = set()
+        if encore_en_ligne:
+            a_verifier = [
+                s["id"] for o in donnees["offres"] for s in o.get("sources", [])
+                if s["nom"] == nom_source and s.get("active", True) and _cle_source(s) not in vues
+            ]
+            toujours = encore_en_ligne(a_verifier) if a_verifier else set()
+        limite = None
+        if delai_jours is not None:
+            limite = (datetime.fromisoformat(maintenant) - timedelta(days=delai_jours)).date().isoformat()
+        for o in donnees["offres"]:
+            if o.get("expiree"):
+                continue
+            for s in o.get("sources", []):
+                if s["nom"] != nom_source or not s.get("active", True) or _cle_source(s) in vues:
+                    continue
+                if s["id"] in toujours:
+                    continue
+                if limite is not None and s.get("vue_le", "") >= limite:
+                    continue  # pas revue aujourd'hui, mais encore dans le délai de grâce
+                s["active"] = False
+            if not any(s.get("active", True) for s in o.get("sources", [])):
                 o["expiree"] = True
                 o["date_expiration"] = maintenant
                 bilan["expirees"] += 1
 
     return bilan
+
+
+# Champs complétés à partir d'un doublon s'ils manquent dans l'offre principale.
+_CHAMPS_COMPLEMENTAIRES = ("entreprise", "salaire", "teletravail", "lieu", "date_publication", "description")
+
+
+def _fusionner(existante: dict, offre: dict, source: dict) -> None:
+    sources = existante.setdefault("sources", [])
+    principale = sources and _cle_source(sources[0]) == _cle_source(source)
+    existante["sources"] = [s for s in sources if _cle_source(s) != _cle_source(source)]
+    if principale:
+        existante["sources"].insert(0, source)
+        for k, v in offre.items():
+            if k not in ("id", "sources", "premiere_vue", "expiree", "date_expiration"):
+                existante[k] = v
+    else:
+        existante["sources"].append(source)
+        for k in _CHAMPS_COMPLEMENTAIRES:
+            if not existante.get(k) and offre.get(k):
+                existante[k] = offre[k]
+        if existante.get("contrat") in (None, "Autre") and offre.get("contrat") not in (None, "Autre"):
+            existante["contrat"] = offre["contrat"]
+        if existante.get("hors_zone") and not offre.get("hors_zone"):
+            existante["hors_zone"] = False
+    existante["expiree"] = False
+    existante["date_expiration"] = None
 
 
 def alleger(donnees: dict, maintenant: datetime) -> None:
