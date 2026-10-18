@@ -27,7 +27,7 @@ jobs:
     steps:
       # « main » explicitement : après une collecte, on veut les données
       # tout juste enregistrées, pas la version du début du lancement.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
       - uses: actions/configure-pages@v5

@@ -30,10 +30,20 @@ recherche:
     - ergonome
     - UX designer
 
-  # Codes métiers ROME de France Travail.
-  # Ils sont vérifiés auprès de France Travail : le compte rendu de chaque
-  # collecte liste les codes ROME des offres trouvées par mots-clés.
-  codes_rome: []
+  # Codes métiers ROME de France Travail : toutes les offres de ces métiers
+  # dans la zone sont récupérées, en plus des recherches par mots-clés.
+  # Codes relevés dans les offres réelles lors de la collecte du 18/10/2026.
+  # Pour revoir la liste des codes trouvés, vide la liste ( codes_rome: [] ) :
+  # le compte rendu de la collecte suivante les affichera.
+  codes_rome:
+    - M1864   # Product Owner
+    - M1806   # Consultant fonctionnel des systèmes d'information
+    - M1881   # Chef de projet Maîtrise d'Ouvrage des SI (MOA)
+    - M1828   # Chef de projet (Project Management Officer)
+    - M1886   # Chef de projet Web
+    - M1853   # Chef de projet étude et développement informatique
+    - M1703   # Chef de produit
+    - E1206   # UX - UI Designer
 
   # Offres en télétravail complet ailleurs en France.
   teletravail_france:

@@ -203,15 +203,18 @@ def collecter(config: dict, client: ClientFranceTravail | None = None) -> dict:
             continue
         reussites += 1
         gardees = 0
+        mention_teletravail = 0
         for brute in brutes:
             offre = convertir(brute, hors_zone=national)
+            mention_teletravail += offre["teletravail"] is not None
             if national and offre["teletravail"] != "complet":
                 continue
             if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
                 continue  # déjà trouvée dans la zone : on garde cette version
             offres[offre["id"]] = offre
             gardees += 1
-        log.info("Recherche « %s » : %d offres reçues, %d gardées", libelle, len(brutes), gardees)
+        log.info("Recherche « %s » : %d offres reçues (%d parlent de télétravail), %d nouvelles gardées",
+                 libelle, len(brutes), mention_teletravail, gardees)
 
     if requetes and reussites == 0:
         raise ErreurSource("Toutes les recherches France Travail ont échoué. " + " | ".join(avertissements[:3]))
