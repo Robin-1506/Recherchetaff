@@ -5,8 +5,8 @@ sources, autour de Nantes (et en télétravail complet en France), et les affich
 sur un site web protégé par un mot de passe.
 
 > **Fonctionnalités :** sources France Travail, Adzuna, Jooble et alertes e-mail,
-> fusion des doublons, score par poste cible, suivi des candidatures, récap
-> quotidien par e-mail, site web. (L'analyse IA avec le CV, envisagée au départ,
+> fusion des doublons, score par poste cible, carte des offres, suivi des
+> candidatures, récap quotidien par e-mail, site web. (L'analyse IA avec le CV, envisagée au départ,
 > n'a pas été retenue.)
 
 ---
@@ -54,6 +54,24 @@ Quelques règles d'écriture :
 
 Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajoute une ligne
 `    - scrum master` dans la liste `mots_cles` (avec 4 espaces avant le tiret, comme les autres).
+
+---
+
+## Carte et localisation
+
+- L'onglet **Carte** place les offres affichées (mêmes filtres que la liste) sur un plan de
+  Nantes et des environs, avec le cercle de la zone de recherche. Les points proches sont
+  regroupés ; leur couleur suit le score (vert ≥ 70, orange ≥ 45, gris en dessous). Un clic
+  ouvre un résumé puis la fiche.
+- La liste et les fiches indiquent la **distance depuis le centre de Nantes**.
+- Dans chaque fiche, le bouton **📍 Google Maps** recherche « entreprise, ville » : c'est le
+  moyen de trouver l'adresse précise et l'itinéraire, car les offres ne donnent le plus
+  souvent que la ville.
+
+Les coordonnées viennent de France Travail et d'Adzuna quand elles les fournissent ; sinon,
+la ville est retrouvée une fois pour toutes grâce au service de géocodage de l'IGN (Base
+Adresse Nationale, gratuit). Fond de carte : OpenStreetMap ; bibliothèque : Leaflet (copiée
+dans `docs/vendor/`, licences incluses).
 
 ---
 

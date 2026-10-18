@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import recap, score, stockage
+from . import geo, recap, score, stockage
 from .chiffrement import dechiffrer
 from .sources import adzuna, alertes_email, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
@@ -73,9 +73,12 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
         compte_rendu += [f"  - ⚠️ {a}" for a in res["avertissements"]]
         compte_rendu += res.get("details", [])
 
+    compte_rendu += ["", geo.localiser(donnees, config, clients.get("geo"))]
+
     repartition = score.noter_tout(donnees, config)
     categories = [p["nom"] for p in (config.get("score") or {}).get("postes", [])] + [score.HORS_CIBLE]
     donnees["meta"]["categories"] = categories
+    donnees["meta"]["centre"] = (config.get("recherche") or {}).get("centre") or list(geo.NANTES)
     compte_rendu += ["", "### Offres en ligne par poste cible", ""]
     compte_rendu += [f"- {c} : {repartition.get(c, 0)}" for c in categories]
 

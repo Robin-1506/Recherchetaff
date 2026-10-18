@@ -68,7 +68,7 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
     titre = nettoyer_html(brute.get("title")) or "(sans titre)"
     description = nettoyer_html(brute.get("description"))
     contrat = detecter_contrat(titre) or _CONTRATS.get(brute.get("contract_type") or "", "Autre")
-    return {
+    offre = {
         "id": f"adz-{brute['id']}",
         "titre": titre,
         "entreprise": (brute.get("company") or {}).get("display_name"),
@@ -84,6 +84,9 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
         "sources": [{"nom": NOM, "id": str(brute["id"]), "url": brute.get("redirect_url"),
                      "date_maj": brute.get("created"), "active": True}],
     }
+    if brute.get("latitude") is not None and brute.get("longitude") is not None:
+        offre["coordonnees"] = [round(float(brute["latitude"]), 5), round(float(brute["longitude"]), 5)]
+    return offre
 
 
 def collecter(config: dict, client: ClientAdzuna | None = None) -> dict:
