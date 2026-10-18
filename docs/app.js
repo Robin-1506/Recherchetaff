@@ -12,7 +12,7 @@ const CLE_MDP = "veille.motDePasse";
 const CLE_VISITE = "veille.derniereVisite";
 const CLE_REFERENCE = "veille.referenceNouveautes";
 
-const etat = { offres: [], reference: null };
+const etat = { offres: [], categories: [], reference: null };
 
 // --- Petits utilitaires ----------------------------------------------------
 
@@ -110,6 +110,7 @@ async function demarrer(motDePasse, memoriser) {
   }
   etat.reference = reference ? new Date(reference) : null;
   etat.offres = donnees.offres || [];
+  etat.categories = (donnees.meta && donnees.meta.categories) || [];
 
   $("ecran-verrou").hidden = true;
   $("app").hidden = false;
@@ -146,14 +147,21 @@ function estNouvelle(o) {
 }
 
 function remplirFiltres() {
-  const ajouter = (select, valeurs) => {
-    for (const v of [...new Set(valeurs)].filter(Boolean).sort()) select.append(el("option", { value: v }, v));
+  const ajouter = (select, valeurs, trier = true) => {
+    const uniques = [...new Set(valeurs)].filter(Boolean);
+    for (const v of trier ? uniques.sort() : uniques) select.append(el("option", { value: v }, v));
   };
+  const presentes = new Set(etat.offres.map((o) => o.categorie));
+  ajouter($("f-categorie"), etat.categories.filter((c) => presentes.has(c)), false);
   ajouter($("f-contrat"), etat.offres.map((o) => o.contrat));
   ajouter($("f-source"), etat.offres.flatMap((o) => (o.sources || []).map((s) => s.nom)));
 }
 
+const HORS_CIBLE = "Hors cible";
+
 function offresFiltrees() {
+  const categorie = $("f-categorie").value;
+  const tri = $("f-tri").value;
   const texte = sansAccents($("f-texte").value.trim());
   const contrat = $("f-contrat").value;
   const tele = $("f-teletravail").value;
@@ -162,21 +170,32 @@ function offresFiltrees() {
   const expirees = $("f-expirees").checked;
   return etat.offres
     .filter((o) => expirees || !o.expiree)
+    .filter((o) => categorie === "*" || (categorie ? o.categorie === categorie : o.categorie !== HORS_CIBLE))
     .filter((o) => !contrat || o.contrat === contrat)
     .filter((o) => !tele || (tele === "aucun" ? !o.teletravail : o.teletravail === tele))
     .filter((o) => !source || (o.sources || []).some((s) => s.nom === source))
     .filter((o) => !nouvelles || estNouvelle(o))
     .filter((o) => !texte || sansAccents([o.titre, o.entreprise, o.lieu, o.description].join(" ")).includes(texte))
-    .sort((a, b) => (b.date_maj || "").localeCompare(a.date_maj || ""));
+    .sort((a, b) => {
+      const parDate = (b.date_maj || "").localeCompare(a.date_maj || "");
+      return tri === "date" ? parDate : ((b.score ?? 0) - (a.score ?? 0)) || parDate;
+    });
+}
+
+function classeScore(score) {
+  return score >= 70 ? "fort" : score >= 45 ? "moyen" : "faible";
 }
 
 function badges(o) {
   return [
+    typeof o.score === "number" && el("span", { class: `badge score ${classeScore(o.score)}`, title: "Score de pertinence" }, `${o.score}/100`),
+    o.categorie && el("span", { class: "badge" + (o.categorie === HORS_CIBLE ? " attention" : " categorie") }, o.categorie),
     estNouvelle(o) && !o.expiree && el("span", { class: "badge nouveau" }, "Nouvelle"),
     o.expiree && el("span", { class: "badge attention" }, "Expirée"),
     o.contrat && el("span", { class: "badge" + (["Freelance", "Intérim"].includes(o.contrat) ? " attention" : "") }, o.contrat),
     o.teletravail === "complet" && el("span", { class: "badge" }, o.hors_zone ? "Full remote (hors Nantes)" : "Télétravail complet"),
     o.teletravail === "partiel" && el("span", { class: "badge" }, "Télétravail partiel"),
+    ...(o.signalements || []).filter((s) => s !== o.contrat).map((s) => el("span", { class: "badge attention" }, s)),
     ...(o.sources || []).map((s) => el("span", { class: "badge" }, s.nom)),
   ].filter(Boolean);
 }
@@ -212,6 +231,12 @@ function ouvrirFiche(o) {
   ];
   if (o.expiree) infos.push(["Expirée le", date(o.date_expiration)]);
   $("fiche-infos").replaceChildren(...infos.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
+
+  const detail = $("fiche-score");
+  detail.hidden = !o.score_detail;
+  detail.open = false;
+  detail.querySelector("summary").textContent = `Pourquoi ${o.score}/100 ?`;
+  detail.querySelector("ul").replaceChildren(...(o.score_detail || []).map((d) => el("li", {}, d)));
 
   $("fiche-liens").replaceChildren(...(o.sources || []).map((s) => {
     const url = urlSure(s.url);
@@ -253,7 +278,7 @@ function brancher() {
     location.reload();
   });
 
-  for (const id of ["f-texte", "f-contrat", "f-teletravail", "f-source", "f-nouvelles", "f-expirees"]) {
+  for (const id of ["f-categorie", "f-tri", "f-texte", "f-contrat", "f-teletravail", "f-source", "f-nouvelles", "f-expirees"]) {
     $(id).addEventListener("input", afficherListe);
   }
 

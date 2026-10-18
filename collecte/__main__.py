@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import stockage
+from . import score, stockage
 from .sources import adzuna, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
 
@@ -63,6 +63,12 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
         )
         compte_rendu += [f"  - ⚠️ {a}" for a in res["avertissements"]]
         compte_rendu += res.get("details", [])
+
+    repartition = score.noter_tout(donnees, config)
+    categories = [p["nom"] for p in (config.get("score") or {}).get("postes", [])] + [score.HORS_CIBLE]
+    donnees["meta"]["categories"] = categories
+    compte_rendu += ["", "### Offres en ligne par poste cible", ""]
+    compte_rendu += [f"- {c} : {repartition.get(c, 0)}" for c in categories]
 
     stockage.alleger(donnees, maintenant)
     actives = sum(1 for o in donnees["offres"] if not o.get("expiree"))

@@ -58,3 +58,171 @@ recherche:
       - UX researcher
     # Ancienneté maximale des offres, en jours (1, 3, 7, 14 ou 31).
     publiees_depuis_jours: 31
+
+# =====================================================================
+#  SCORE DE PERTINENCE (sur 100)
+# ---------------------------------------------------------------------
+#  score = points du poste cible + bonus mots-clés + lieu + contrat
+#  Les mots sont cherchés sans tenir compte des majuscules ni des accents.
+# =====================================================================
+score:
+  # Postes cibles, du plus prioritaire au moins prioritaire.
+  # Une offre reçoit la catégorie du premier poste dont un intitulé apparaît
+  # dans son titre (points complets). À défaut, si un intitulé apparaît
+  # seulement dans la description, elle reçoit la catégorie avec des points
+  # réduits (voir « part_si_description »).
+  postes:
+    - nom: Product Owner
+      points: 50
+      intitules:
+        - product owner
+        - proxy product owner
+        - PO
+        - PPO
+        - responsable produit
+    - nom: Chef de projet IT / digital
+      points: 42
+      intitules:
+        - chef de projet digital
+        - chef de projet informatique
+        - chef de projet IT
+        - chef de projet SI
+        - chef de projet web
+        - chef de projet numérique
+        - chef de projet e-commerce
+        - chef de projet applicatif
+        - chef de projet fonctionnel
+        - cheffe de projet
+        - chef de projet
+        - project manager
+    - nom: Business Analyst / AMOA
+      points: 38
+      intitules:
+        - business analyst
+        - AMOA
+        - MOA
+        - assistance à maîtrise d'ouvrage
+        - assistant maîtrise d'ouvrage
+        - maîtrise d'ouvrage
+        - consultant fonctionnel
+        - analyste fonctionnel
+        - functional analyst
+    - nom: Product Manager
+      points: 34
+      intitules:
+        - product manager
+        - chef de produit digital
+        - chef de produit web
+        - chef de produit
+    - nom: UX Researcher / Ergonome IHM
+      points: 28
+      intitules:
+        - UX researcher
+        - user researcher
+        - ergonome IHM
+        - ergonome logiciel
+        - ergonome UX
+        - ergonome
+        - UX designer
+        - UX/UI designer
+        - UX UI designer
+        - UX
+  part_si_description: 0.4
+
+  # Mots-clés valorisés (titre ou description) : points ajoutés pour chacun.
+  mots_cles_bonus:
+    recueil des besoins: 6
+    expression des besoins: 5
+    backlog: 5
+    UX: 5
+    ergonomie: 5
+    user stories: 4
+    user story: 4
+    agile: 4
+    scrum: 4
+    tests utilisateurs: 4
+    design thinking: 3
+    MOA: 3
+    AMOA: 3
+    spécifications fonctionnelles: 3
+    roadmap: 2
+    JIRA: 2
+  # Maximum de points apportés par les mots-clés bonus.
+  plafond_bonus: 25
+
+  # Points selon le lieu.
+  lieu:
+    zone: 15           # Nantes et alentours (rayon de la recherche)
+    teletravail_complet: 10   # ailleurs en France, en télétravail complet
+
+  # Points selon le contrat. Les contrats non listés valent 0.
+  contrats:
+    CDI: 15
+    CDD: 10
+    Autre: 6
+    Freelance: 3
+    Intérim: 3
+
+  # Offres « hors cible » : si l'une de ces expressions est dans le TITRE,
+  # l'offre est déclassée (score divisé par 5) et classée hors cible.
+  # Préfère des expressions précises à des mots seuls : « santé » écarterait
+  # aussi un « Product Owner secteur santé ».
+  exclusions_titre:
+    - stage
+    - stagiaire
+    - alternance
+    - alternant
+    - apprenti
+    - apprentissage
+    - développeur
+    - développeuse
+    - developer
+    - développement logiciel
+    - full stack
+    - fullstack
+    - devops
+    - data engineer
+    - data scientist
+    - ingénieur système
+    - ingénieur réseau
+    - technicien
+    - commercial
+    - commerciale
+    - business developer
+    - ingénieur d'affaires
+    - account manager
+    - vendeur
+    - vendeuse
+    # Ergonomie physique / santé au travail (et non ergonomie des logiciels)
+    - santé au travail
+    - santé et sécurité
+    - santé sécurité
+    - sécurité au travail
+    - conditions de travail
+    - prévention des risques
+    - HSE
+    - QSE
+    - ergothérapeute
+    # Chefs de projet hors informatique
+    - chef de projet travaux
+    - chef de projet BTP
+    - chef de projet bâtiment
+    - chef de projet génie civil
+    - chef de projet industriel
+    - chef de projet industrialisation
+    - chef de projet événementiel
+    - conducteur de travaux
+  # Les offres de stage et d'alternance sont toujours hors cible.
+  contrats_exclus:
+    - Stage
+    - Alternance
+
+  # Indices d'une mission en ESN / cabinet de conseil (signalée, pas exclue).
+  indices_esn:
+    - ESN
+    - SSII
+    - pour l'un de nos clients
+    - pour le compte de notre client
+    - notre client
+    - intercontrat
+    - portage salarial

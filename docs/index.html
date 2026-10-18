@@ -36,6 +36,18 @@
     <section class="filtres" aria-label="Filtres">
       <input id="f-texte" type="search" placeholder="Rechercher (titre, entreprise, ville…)" aria-label="Rechercher">
       <div class="filtres-ligne">
+        <select id="f-categorie" aria-label="Poste cible">
+          <option value="">Mes postes cibles</option>
+          <option value="*">Toutes les offres</option>
+        </select>
+        <select id="f-tri" aria-label="Tri">
+          <option value="score">Tri : pertinence</option>
+          <option value="date">Tri : plus récentes</option>
+        </select>
+      </div>
+      <details class="plus-filtres">
+      <summary>Plus de filtres</summary>
+      <div class="filtres-ligne">
         <select id="f-contrat" aria-label="Contrat">
           <option value="">Tous contrats</option>
         </select>
@@ -53,6 +65,7 @@
         <label class="case"><input id="f-nouvelles" type="checkbox"> Nouvelles seulement</label>
         <label class="case"><input id="f-expirees" type="checkbox"> Afficher les expirées</label>
       </div>
+      </details>
     </section>
 
     <p id="compteur" class="compteur" aria-live="polite"></p>
@@ -67,6 +80,10 @@
       <p id="fiche-sous-titre" class="discret"></p>
       <div id="fiche-badges" class="badges"></div>
       <dl id="fiche-infos" class="infos"></dl>
+      <details id="fiche-score" class="detail-score">
+        <summary></summary>
+        <ul></ul>
+      </details>
       <div id="fiche-liens" class="liens"></div>
       <h3>Description</h3>
       <div id="fiche-description" class="description"></div>
