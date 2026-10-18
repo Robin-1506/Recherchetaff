@@ -13,7 +13,8 @@ from pathlib import Path
 
 import yaml
 
-from . import score, stockage
+from . import recap, score, stockage
+from .chiffrement import dechiffrer
 from .sources import adzuna, alertes_email, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
 
@@ -22,6 +23,8 @@ CHEMIN_CONFIG = RACINE / "config" / "criteres.yaml"
 CHEMIN_DONNEES = RACINE / "docs" / "data" / "offres.chiffre.json"
 # État des sources (non chiffré, sans donnée personnelle) : réécrit à chaque collecte.
 CHEMIN_STATUT = RACINE / "docs" / "data" / "statut.json"
+# Suivi des candidatures, écrit par le site (chiffré).
+CHEMIN_SUIVI = RACINE / "docs" / "data" / "suivi.chiffre.json"
 
 # Ordre de passage : la première source qui trouve une offre en garde la
 # fiche principale, les suivantes y ajoutent leur lien.
@@ -82,6 +85,48 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
     return compte_rendu, {"derniere_collecte": horodatage, "sources": statuts}
 
 
+def url_site(config: dict) -> str:
+    reglage = (config.get("recap") or {}).get("url_site")
+    if reglage:
+        return reglage
+    proprietaire, _, depot = os.environ.get("GITHUB_REPOSITORY", "/").partition("/")
+    return f"https://{proprietaire.lower()}.github.io/{depot}/" if depot else ""
+
+
+def gerer_recap(config: dict, donnees: dict, maintenant: datetime, mot_de_passe: str) -> dict:
+    """Prépare et envoie le récap. Renvoie un statut affichable (sans donnée personnelle)."""
+    reglages = config.get("recap") or {}
+    if not reglages.get("actif", True):
+        return {"ok": True, "envoye": False, "message": "Récap désactivé dans les réglages."}
+    if os.environ.get("ENVOYER_RECAP") != "oui":
+        return {"ok": True, "envoye": False, "message": "Collecte lancée à la main : pas de récap."}
+    expediteur = os.environ.get("GMAIL_ADRESSE")
+    mdp_gmail = os.environ.get("GMAIL_MOT_DE_PASSE_APPLI")
+    destinataire = os.environ.get("RECAP_DESTINATAIRE")
+    if not (expediteur and mdp_gmail and destinataire):
+        return {"ok": False, "non_configure": True, "envoye": False,
+                "message": "Récap non configuré (secrets GMAIL_ADRESSE, GMAIL_MOT_DE_PASSE_APPLI ou RECAP_DESTINATAIRE absents)."}
+
+    suivi = None
+    if CHEMIN_SUIVI.exists():
+        try:
+            suivi = dechiffrer(json.loads(CHEMIN_SUIVI.read_text(encoding="utf-8")), mot_de_passe)
+        except Exception:
+            log.warning("Suivi des candidatures illisible : le récap ne contiendra pas les relances.")
+
+    horodatage = maintenant.isoformat(timespec="seconds")
+    contenu = recap.preparer(donnees, suivi, horodatage, maintenant, reglages)
+    if contenu is None:
+        return {"ok": True, "envoye": False, "message": "Rien de nouveau : pas d'e-mail aujourd'hui."}
+    try:
+        recap.envoyer(recap.composer(contenu, url_site(config)), expediteur, mdp_gmail, destinataire)
+    except Exception as e:  # le message d'erreur peut contenir une adresse : on ne garde que son type
+        log.error("Envoi du récap impossible (%s)", e.__class__.__name__)
+        return {"ok": False, "envoye": False, "message": f"Envoi du récap impossible ({e.__class__.__name__})."}
+    return {"ok": True, "envoye": True,
+            "message": f"Récap envoyé : {len(contenu['nouvelles'])} nouvelles offres, {len(contenu['relances'])} relances."}
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     mot_de_passe = os.environ.get("MOT_DE_PASSE_SITE")
@@ -97,8 +142,10 @@ def main() -> int:
     compte_rendu, statut = lancer(config, donnees, maintenant)
     ecrit = stockage.enregistrer(CHEMIN_DONNEES, donnees, mot_de_passe,
                                  precedentes if CHEMIN_DONNEES.exists() else None)
-    CHEMIN_STATUT.write_text(json.dumps(statut, ensure_ascii=False, indent=2), encoding="utf-8")
     compte_rendu.append("Données mises à jour." if ecrit else "Aucun changement dans les données.")
+    statut["recap"] = gerer_recap(config, donnees, maintenant, mot_de_passe)
+    compte_rendu.append(statut["recap"]["message"])
+    CHEMIN_STATUT.write_text(json.dumps(statut, ensure_ascii=False, indent=2), encoding="utf-8")
 
     texte = "\n".join(compte_rendu)
     print(texte)

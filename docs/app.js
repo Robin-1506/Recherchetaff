@@ -163,6 +163,10 @@ function afficherStatut(statut, aucuneDonnee) {
       alertes.append(el("p", { class: "alerte" }, `ℹ️ ${s.nom} : collecte partielle (${s.message})`));
     }
   }
+  const recap = statut.recap;
+  if (recap && !recap.ok) {
+    alertes.append(el("p", { class: recap.non_configure ? "alerte info" : "alerte" }, `✉️ ${recap.message}`));
+  }
   if (aucuneDonnee) alertes.append(el("p", { class: "alerte" }, "Aucune offre enregistrée pour l'instant."));
 }
 

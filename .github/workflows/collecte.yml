@@ -10,6 +10,11 @@ on:
     - cron: "45 4 * * *"
     - cron: "45 5 * * *"
   workflow_dispatch:
+    inputs:
+      recap:
+        description: "Envoyer aussi le récap par e-mail"
+        type: boolean
+        default: false
 
 concurrency:
   group: collecte
@@ -58,6 +63,9 @@ jobs:
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
           GMAIL_ADRESSE: ${{ secrets.GMAIL_ADRESSE }}
           GMAIL_MOT_DE_PASSE_APPLI: ${{ secrets.GMAIL_MOT_DE_PASSE_APPLI }}
+          RECAP_DESTINATAIRE: ${{ secrets.RECAP_DESTINATAIRE }}
+          # Récap : toujours le matin (collecte automatique), et à la main si la case est cochée.
+          ENVOYER_RECAP: ${{ (github.event_name == 'schedule' || inputs.recap) && 'oui' || 'non' }}
           MOT_DE_PASSE_SITE: ${{ secrets.MOT_DE_PASSE_SITE }}
         run: python -m collecte
 

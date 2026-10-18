@@ -4,9 +4,9 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 5 sur 7.** Sources France Travail, Adzuna, Jooble et
+> **État actuel : étape 6 sur 7.** Sources France Travail, Adzuna, Jooble et
 > alertes e-mail, fusion des doublons, score par poste cible, suivi des
-> candidatures, site web. Les étapes à venir ajouteront le récap quotidien et
+> candidatures, récap quotidien par e-mail, site web. L'étape à venir ajoutera
 > l'analyse IA.
 
 ---
@@ -85,6 +85,21 @@ supprime-le sur GitHub (Settings → Developer settings → Personal access toke
 
 ---
 
+## Récap quotidien par e-mail
+
+Après la collecte automatique du matin, un e-mail part de la boîte Gmail dédiée vers
+l'adresse du secret `RECAP_DESTINATAIRE`. Il contient :
+- le nombre de **nouvelles offres** dans tes postes cibles (hors offres ignorées) ;
+- les **5 meilleures** avec leur score et un lien ;
+- les **candidatures à relancer** aujourd'hui (ou en retard), avec le contact noté.
+
+**Pas d'e-mail s'il n'y a rien de nouveau.** Une collecte lancée à la main n'envoie pas de
+récap, sauf si tu coches « Envoyer aussi le récap par e-mail » au moment de la lancer.
+Réglages (activer / désactiver, nombre d'offres détaillées) : section `recap:` de
+`config/criteres.yaml`. Si l'envoi échoue, un bandeau ✉️ l'indique sur le site.
+
+---
+
 ## Comprendre et régler le score
 
 Chaque offre reçoit une **catégorie** (l'un de tes 5 postes cibles, ou « Hors cible ») et
@@ -135,6 +150,7 @@ Pour changer une valeur : clique sur le crayon à côté du secret existant.
 | `JOOBLE_API_KEY` | Clé Jooble | 2 |
 | `GMAIL_ADRESSE` | Adresse de la boîte Gmail dédiée aux alertes | 4 |
 | `GMAIL_MOT_DE_PASSE_APPLI` | Mot de passe d'application de cette boîte (16 lettres) | 4 |
+| `RECAP_DESTINATAIRE` | Adresse qui reçoit le récap quotidien | 6 |
 
 Si un secret manque, la source correspondante est simplement indiquée « pas encore
 configurée » sur le site, et les autres continuent de fonctionner.
