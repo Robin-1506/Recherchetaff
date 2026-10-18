@@ -132,10 +132,60 @@ def test_envoyer_via_smtp_gmail(monkeypatch):
         def send_message(self, message):
             appels["message"] = message
 
+        def login(self, utilisateur, mdp):
+            appels["login"] = utilisateur
+            appels["mdp"] = mdp
+
     monkeypatch.setattr(recap.smtplib, "SMTP_SSL", FauxSMTP)
     message = recap.composer(recap.preparer(DONNEES, None, HORO, MAINTENANT, {}), "https://site/")
-    recap.envoyer(message, "veille@example.com", "abcd", "moi@example.com")
+    recap.envoyer(message, "veille@example.com", "abcd efgh ijkl mnop", "moi@example.com")
     assert appels["serveur"] == ("smtp.gmail.com", 465)
+    assert appels["mdp"] == "abcdefghijklmnop"
     assert appels["login"] == "veille@example.com"
     assert appels["message"]["To"] == "moi@example.com"
     assert "Veille emploi" in appels["message"]["From"]
+
+
+def test_secours_587_et_diagnostic_sans_adresse(monkeypatch):
+    import smtplib
+
+    class SSLCoupe:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, *a):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed for veille@example.com")
+
+    envoye = []
+
+    class Starttls(SSLCoupe):
+        def login(self, *a):
+            pass
+
+        def send_message(self, m):
+            envoye.append(m)
+
+    monkeypatch.setattr(recap.smtplib, "SMTP_SSL", SSLCoupe)
+    monkeypatch.setattr(recap.smtplib, "SMTP", Starttls)
+    message = recap.composer(recap.preparer(DONNEES, None, HORO, MAINTENANT, {}), "https://site/")
+    recap.envoyer(message, "veille@example.com", "abcd", "moi@example.com")
+    assert envoye  # le port 587 a pris le relais
+
+    monkeypatch.setattr(recap.smtplib, "SMTP", SSLCoupe)
+    message = recap.composer(recap.preparer(DONNEES, None, HORO, MAINTENANT, {}), "https://site/")
+    with pytest.raises(recap.ErreurEnvoi) as erreur:
+        recap.envoyer(message, "veille@example.com", "abcd", "moi@example.com")
+    assert "étape identification" in str(erreur.value)
+    assert "example.com" not in str(erreur.value)
