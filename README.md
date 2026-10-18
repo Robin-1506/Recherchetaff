@@ -4,10 +4,10 @@ Application personnelle qui rassemble chaque matin les offres d'emploi de plusie
 sources, autour de Nantes (et en télétravail complet en France), et les affiche
 sur un site web protégé par un mot de passe.
 
-> **État actuel : étape 6 sur 7.** Sources France Travail, Adzuna, Jooble et
-> alertes e-mail, fusion des doublons, score par poste cible, suivi des
-> candidatures, récap quotidien par e-mail, site web. L'étape à venir ajoutera
-> l'analyse IA.
+> **Fonctionnalités :** sources France Travail, Adzuna, Jooble et alertes e-mail,
+> fusion des doublons, score par poste cible, suivi des candidatures, récap
+> quotidien par e-mail, site web. (L'analyse IA avec le CV, envisagée au départ,
+> n'a pas été retenue.)
 
 ---
 
