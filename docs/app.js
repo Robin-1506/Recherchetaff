@@ -136,6 +136,7 @@ async function demarrer(motDePasse, memoriser) {
   etat.reference = reference ? new Date(reference) : null;
   etat.offres = donnees.offres || [];
   etat.categories = (donnees.meta && donnees.meta.categories) || [];
+  etat.centre = (donnees.meta && donnees.meta.centre) || [47.2184, -1.5536];
 
   $("ecran-verrou").hidden = true;
   $("app").hidden = false;
@@ -239,15 +240,31 @@ function badges(o) {
   ].filter(Boolean);
 }
 
+function distanceTexte(o) {
+  // Rien pour Nantes même (« à 0 km ») ni pour le télétravail complet lointain.
+  return typeof o.distance_km === "number" && o.distance_km >= 2 && !o.hors_zone ? `à ${o.distance_km} km` : null;
+}
+
+// Lien Google Maps : recherche « entreprise, ville » (l'offre donne rarement l'adresse exacte).
+function lienGoogleMaps(o) {
+  const ville = (o.lieu || "").replace(/^\s*\d{2,3}\s*-\s*/, "");
+  const recherche = [o.entreprise, ville].filter(Boolean).join(", ");
+  return recherche ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(recherche)}` : null;
+}
+
 function afficherListe() {
   const offres = offresFiltrees();
   const nb = offres.length;
   $("compteur").textContent = `${nb} offre${nb > 1 ? "s" : ""}`;
+  if (!$("carte-zone").hidden) {
+    Carte.afficher(offres);
+    return;
+  }
   $("liste").replaceChildren(...offres.map((o) => el("li", {},
     el("button", { type: "button", class: "carte offre" + (o.expiree ? " expiree" : ""), onclick: () => ouvrirFiche(o) },
       el("span", { class: "offre-titre" }, o.titre),
       el("span", { class: "offre-ligne" }, [o.entreprise || "Entreprise non précisée", o.lieu].filter(Boolean).join(" · ")),
-      el("span", { class: "offre-ligne" }, `Mise à jour le ${date(o.date_maj)}`),
+      el("span", { class: "offre-ligne" }, [`Mise à jour le ${date(o.date_maj)}`, distanceTexte(o)].filter(Boolean).join(" · ")),
       el("span", { class: "badges" }, badges(o)),
     ),
   )));
@@ -268,6 +285,7 @@ function ouvrirFiche(o) {
     ["Mise à jour", date(o.date_maj)],
     ["Repérée le", date(o.premiere_vue)],
   ];
+  if (distanceTexte(o)) infos.push(["Distance", `${distanceTexte(o)} du centre de Nantes`]);
   if (o.expiree) infos.push(["Expirée le", date(o.date_expiration)]);
   $("fiche-infos").replaceChildren(...infos.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
 
@@ -289,6 +307,9 @@ function ouvrirFiche(o) {
   }));
 
   $("fiche-description").textContent = o.description || "Description non disponible.";
+  const maps = lienGoogleMaps(o);
+  $("b-maps").hidden = !maps;
+  if (maps) $("b-maps").href = maps;
   etat.offreOuverte = o;
   actualiserActionsFiche();
   $("fiche").showModal();
@@ -371,8 +392,10 @@ function brancher() {
 }
 
 function afficherVue(vue) {
-  $("vue-offres").hidden = vue !== "offres";
+  $("vue-offres").hidden = vue === "suivi";
   $("vue-suivi").hidden = vue !== "suivi";
+  $("liste").hidden = vue !== "offres";
+  $("carte-zone").hidden = vue !== "carte";
   for (const onglet of document.querySelectorAll(".onglet")) {
     onglet.classList.toggle("actif", onglet.dataset.vue === vue);
   }

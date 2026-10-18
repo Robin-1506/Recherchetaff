@@ -13,6 +13,8 @@ recherche:
   # Commune de référence : nom (Adzuna, Jooble) et code INSEE (France Travail).
   ville: Nantes
   commune_insee: "44109"
+  # Coordonnées du centre (latitude, longitude) : sert à la carte et aux distances.
+  centre: [47.2184, -1.5536]
   # Rayon autour de la commune, en kilomètres.
   rayon_km: 30
 

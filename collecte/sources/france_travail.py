@@ -133,7 +133,7 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
     lieu = brute.get("lieuTravail") or {}
     description = brute.get("description") or ""
     date_maj = brute.get("dateActualisation") or brute.get("dateCreation")
-    return {
+    offre = {
         "id": f"ft-{id_ft}",
         "titre": brute.get("intitule") or "(sans titre)",
         "entreprise": (brute.get("entreprise") or {}).get("nom"),
@@ -158,6 +158,9 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
             }
         ],
     }
+    if lieu.get("latitude") is not None and lieu.get("longitude") is not None:
+        offre["coordonnees"] = [round(float(lieu["latitude"]), 5), round(float(lieu["longitude"]), 5)]
+    return offre
 
 
 def collecter(config: dict, client: ClientFranceTravail | None = None) -> dict:

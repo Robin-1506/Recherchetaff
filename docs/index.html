@@ -6,6 +6,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Veille emploi Nantes</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8E%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
+  <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,6 +39,7 @@
       <div id="alertes-sources"></div>
       <nav class="onglets" aria-label="Vues">
         <button type="button" class="onglet actif" data-vue="offres">Offres</button>
+        <button type="button" class="onglet" data-vue="carte">Carte</button>
         <button type="button" class="onglet" data-vue="suivi">Suivi <span id="nb-suivi" class="pastille" hidden></span></button>
       </nav>
     </header>
@@ -80,6 +84,11 @@
 
     <p id="compteur" class="compteur" aria-live="polite"></p>
     <ul id="liste" class="liste"></ul>
+    <div id="carte-zone" hidden>
+      <div id="carte" class="carte-offres" role="region" aria-label="Carte des offres"></div>
+      <p class="discret">Les points indiquent la ville du poste (rarement l'adresse exacte) : ouvre une offre puis
+        « Google Maps » pour trouver l'entreprise. Fond de carte © contributeurs OpenStreetMap.</p>
+    </div>
     </section>
 
     <!-- Suivi des candidatures -->
@@ -106,6 +115,7 @@
         <button id="b-interessant" type="button" class="bouton-discret">☆ Intéressante</button>
         <button id="b-ignorer" type="button" class="bouton-discret">Ignorer</button>
         <button id="b-suivre" type="button" class="bouton-principal">Ajouter au suivi</button>
+        <a id="b-maps" class="bouton-discret" target="_blank" rel="noopener noreferrer">📍 Google Maps</a>
       </div>
       <dl id="fiche-infos" class="infos"></dl>
       <details id="fiche-score" class="detail-score">
@@ -157,7 +167,10 @@
     </form>
   </dialog>
 
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/markercluster/leaflet.markercluster.js"></script>
   <script src="app.js"></script>
+  <script src="carte.js"></script>
   <script src="suivi.js"></script>
 </body>
 </html>
