@@ -132,9 +132,15 @@ def test_envoyer_via_smtp_gmail(monkeypatch):
         def send_message(self, message):
             appels["message"] = message
 
-        def login(self, utilisateur, mdp):
-            appels["login"] = utilisateur
-            appels["mdp"] = mdp
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def auth_plain(self):
+            pass
+
+        def auth(self, mecanisme, objet):
+            appels["login"] = self.user
+            appels["mdp"] = self.password
 
     monkeypatch.setattr(recap.smtplib, "SMTP_SSL", FauxSMTP)
     message = recap.composer(recap.preparer(DONNEES, None, HORO, MAINTENANT, {}), "https://site/")
@@ -166,13 +172,19 @@ def test_secours_587_et_diagnostic_sans_adresse(monkeypatch):
         def starttls(self):
             pass
 
-        def login(self, *a):
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def auth_plain(self):
+            pass
+
+        def auth(self, *a):
             raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed for veille@example.com")
 
     envoye = []
 
     class Starttls(SSLCoupe):
-        def login(self, *a):
+        def auth(self, *a):
             pass
 
         def send_message(self, m):
@@ -189,4 +201,35 @@ def test_secours_587_et_diagnostic_sans_adresse(monkeypatch):
     with pytest.raises(recap.ErreurEnvoi) as erreur:
         recap.envoyer(message, "veille@example.com", "abcd", "moi@example.com")
     assert "étape identification" in str(erreur.value)
+    assert "example.com" not in str(erreur.value)
+
+
+def test_motif_du_refus_de_gmail_affiche_sans_adresse(monkeypatch):
+    import smtplib
+
+    class Refus:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo_or_helo_if_needed(self):
+            pass
+
+        def auth_plain(self):
+            pass
+
+        def auth(self, *a):
+            raise smtplib.SMTPAuthenticationError(
+                534, b"5.7.9 Please log in with your web browser for veille@example.com")
+
+    monkeypatch.setattr(recap.smtplib, "SMTP_SSL", Refus)
+    message = recap.composer(recap.preparer(DONNEES, None, HORO, MAINTENANT, {}), "https://site/")
+    with pytest.raises(recap.ErreurEnvoi) as erreur:
+        recap.envoyer(message, "veille@example.com", "abcd", "moi@example.com")
+    assert "code 534" in str(erreur.value) and "log in with your web browser" in str(erreur.value)
     assert "example.com" not in str(erreur.value)

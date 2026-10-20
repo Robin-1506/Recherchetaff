@@ -112,3 +112,27 @@ def test_notre_recap_n_est_pas_lu_comme_une_alerte():
     res = ae.collecter(CONFIG, messages=[m.as_bytes()])
     assert res["offres"] == []
     assert not any("e-mail de" in ligne for ligne in res["details"])
+
+
+def test_motif_du_refus_imap(monkeypatch):
+    import imaplib
+    import pytest
+
+    class FauxIMAP:
+        def __init__(self, *a):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def login(self, *a):
+            raise imaplib.IMAP4.error(b"[ALERT] Application-specific password required for moi@example.com")
+
+    monkeypatch.setattr(ae.imaplib, "IMAP4_SSL", FauxIMAP)
+    with pytest.raises(ae.ErreurSource) as erreur:
+        ae.lire_boite("moi@example.com", "abcd", 7)
+    assert "Application-specific password required" in str(erreur.value)
+    assert "example.com" not in str(erreur.value)

@@ -295,9 +295,12 @@ def lire_boite(adresse: str, mot_de_passe: str, jours: int) -> list[bytes]:
                     messages.append(morceaux[0][1])
             return messages
     except imaplib.IMAP4.error as e:
+        raison = e.args[0] if e.args else ""
+        raison = raison.decode(errors="replace") if isinstance(raison, bytes) else str(raison)
+        raison = re.sub(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", "<adresse>", raison)[:150]
         raise ErreurSource(
-            "Connexion à Gmail refusée. Vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI "
-            "(mot de passe d'application, pas le mot de passe du compte)."
+            f"Connexion à Gmail refusée (réponse de Google : {raison or 'aucune'}). Vérifie GMAIL_ADRESSE et "
+            "GMAIL_MOT_DE_PASSE_APPLI (mot de passe d'application, pas le mot de passe du compte)."
         ) from e
     except OSError as e:
         raise ErreurSource(f"Gmail injoignable : {e.__class__.__name__}") from e

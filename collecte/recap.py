@@ -171,14 +171,20 @@ def envoyer(message: EmailMessage, expediteur: str, mot_de_passe: str, destinata
         try:
             with _ouvrir(mode) as smtp:
                 etape = "identification"
-                smtp.login(expediteur, mot_de_passe)
+                # Une seule méthode (PLAIN) : avec login(), un refus est suivi d'un
+                # second essai sur lequel Gmail coupe la connexion, ce qui masque
+                # le motif du refus.
+                smtp.ehlo_or_helo_if_needed()
+                smtp.user, smtp.password = expediteur, mot_de_passe
+                smtp.auth("PLAIN", smtp.auth_plain)
                 etape = "envoi"
                 smtp.send_message(message)
             return
         except smtplib.SMTPAuthenticationError as e:
+            reponse = e.smtp_error.decode(errors="replace") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
             raise ErreurEnvoi(
                 "identification refusée par Gmail : vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI "
-                f"(code {e.smtp_code})"
+                f"(code {e.smtp_code}, réponse de Google : {masquer(' '.join(reponse.split()))[:200]})"
             ) from e
         except (smtplib.SMTPException, OSError) as e:
             detail = masquer(str(e))[:150] or e.__class__.__name__
