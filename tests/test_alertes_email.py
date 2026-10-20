@@ -136,3 +136,30 @@ def test_motif_du_refus_imap(monkeypatch):
         ae.lire_boite("moi@example.com", "abcd", 7)
     assert "Application-specific password required" in str(erreur.value)
     assert "example.com" not in str(erreur.value)
+
+
+def _lien_engage(destination: str) -> str:
+    """Lien de suivi au format des alertes Indeed : adresse codée en base64 après des octets techniques."""
+    import base64
+    bloc = base64.b64encode(b"F\x04i\x12\x9a\x0bP\x00D" + bytes([len(destination)]) + destination.encode() + b"W\x03spc")
+    return f"https://engage.indeed.com/f/a/99iDAoiuuAxIa77XG2U1g~~/AAR4hBA~/{bloc.decode()}"
+
+
+def test_indeed_adresse_codee_dans_le_lien_de_suivi():
+    html = f"""<table><tr><td><a href="{_lien_engage('https://fr.indeed.com/rc/clk/dl?jk=5f9c0a1b2c3d4e5f&from=ja&tk=XYZ')}">Product Owner (H/F)</a></td></tr>
+    <tr><td>Banque Ouest - Nantes (44)</td></tr>
+    <tr><td><a href="{_lien_engage('https://fr.indeed.com/alert/unsubscribe?id=ABC')}">Se désabonner</a></td></tr></table>"""
+    offres, diag = ae.analyser_message(message(html, expediteur="alert@jobalert.indeed.com"), SITES)
+    assert diag["nb"] == 1
+    o = offres[0]
+    assert o["titre"] == "Product Owner (H/F)"
+    assert o["entreprise"] == "Banque Ouest"
+    assert o["sources"][0]["nom"] == "Indeed (alerte)"
+    assert o["sources"][0]["url"] == "https://fr.indeed.com/viewjob?jk=5f9c0a1b2c3d4e5f"
+
+
+def test_diagnostic_montre_la_forme_de_la_destination_codee():
+    html = f"""<a href="{_lien_engage('https://fr.indeed.com/inconnu/12345?xyz=SECRET&u=moi@example.com')}">Offre</a>"""
+    _, diag = ae.analyser_message(message(html, expediteur="alert@jobalert.indeed.com"), SITES)
+    assert diag["formes"] == ["engage.indeed.com/f/a/…/…/… → fr.indeed.com/inconnu/99999 ?xyz&u"]
+    assert "SECRET" not in str(diag) and "moi@" not in str(diag)  # noms des paramètres seulement
