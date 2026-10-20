@@ -26,6 +26,7 @@ from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
 
 from ..modele import detecter_contrat, detecter_teletravail, normaliser_texte, tronquer
+from ..recap import ENTETE_RECAP
 from .commun import ErreurSource, SourceNonConfiguree
 
 NOM = "Alertes e-mail"
@@ -257,6 +258,8 @@ def analyser_message(brut: bytes, sites: list[dict]) -> tuple[list[dict], dict]:
     except (TypeError, ValueError):
         date_iso = None
     expediteur = (message.get("From") or "").rsplit("@", 1)[-1].strip(" >").lower()
+    if message.get(ENTETE_RECAP):  # notre propre récap quotidien
+        return [], {"expediteur": expediteur, "nb": 0, "formes": [], "ignore": True}
     html, texte = _corps(message)
     extraites = extraire_offres_html(html, sites) if html else extraire_offres_texte(texte, sites)
     diagnostic = {"expediteur": expediteur, "nb": len(extraites), "formes": []}
@@ -319,7 +322,7 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
         except Exception as e:  # un e-mail illisible ne bloque pas les autres
             log.warning("E-mail illisible : %s", e)
             continue
-        if diag["expediteur"] in ignores:
+        if diag.get("ignore") or diag["expediteur"] in ignores:
             continue
         for o in extraites:
             offres.setdefault(o["id"], o)

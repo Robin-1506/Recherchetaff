@@ -102,3 +102,13 @@ def test_expediteurs_ignores():
     res = ae.collecter(CONFIG, messages=[message(LINKEDIN, expediteur="no-reply@accounts.google.com")])
     assert res["offres"] == []
     assert not any("google" in ligne for ligne in res["details"])
+
+
+def test_notre_recap_n_est_pas_lu_comme_une_alerte():
+    from collecte import recap
+    from email import message_from_bytes
+    m = message_from_bytes(message(LINKEDIN))
+    m[recap.ENTETE_RECAP] = "recap"
+    res = ae.collecter(CONFIG, messages=[m.as_bytes()])
+    assert res["offres"] == []
+    assert not any("e-mail de" in ligne for ligne in res["details"])

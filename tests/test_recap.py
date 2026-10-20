@@ -144,6 +144,7 @@ def test_envoyer_via_smtp_gmail(monkeypatch):
     assert appels["login"] == "veille@example.com"
     assert appels["message"]["To"] == "moi@example.com"
     assert "Veille emploi" in appels["message"]["From"]
+    assert appels["message"][recap.ENTETE_RECAP] == "recap"
 
 
 def test_secours_587_et_diagnostic_sans_adresse(monkeypatch):

@@ -22,6 +22,9 @@ SERVEUR_SMTP = "smtp.gmail.com"
 PARIS = ZoneInfo("Europe/Paris")
 COLONNES_A_RELANCER = ("postule", "entretien")
 NOMS_COLONNES = {"postule": "Postulé", "entretien": "Entretien"}
+# En-tête ajouté au récap : la boîte qui l'envoie peut aussi le recevoir, et
+# la lecture des alertes ne doit pas le prendre pour une alerte d'offres.
+ENTETE_RECAP = "X-Veille-Emploi"
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +163,7 @@ def envoyer(message: EmailMessage, expediteur: str, mot_de_passe: str, destinata
     """Envoie par Gmail : port 465 (SSL), puis 587 (STARTTLS) en secours."""
     message["From"] = f"Veille emploi <{expediteur}>"
     message["To"] = destinataire
+    message[ENTETE_RECAP] = "recap"  # pour que la lecture des alertes l'ignore
     mot_de_passe = mot_de_passe.replace(" ", "").strip()  # « abcd efgh ijkl mnop » → « abcdefghijklmnop »
     echecs = []
     for mode in ("SSL 465", "STARTTLS 587"):
