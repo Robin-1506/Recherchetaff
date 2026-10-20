@@ -98,7 +98,9 @@ alertes_email:
       motif_lien: 'hellowork\.com/\w{2}-\w{2}/emplois/(?P<id>\d+)'
       url_offre: 'https://www.hellowork.com/fr-fr/emplois/{id}.html'
     - nom: Indeed
-      motif_lien: 'indeed\.\w+/(?:rc/clk|viewjob|pagead/clk|m/viewjob)\?(?:[^"\s]*&)?jk=(?P<id>[0-9a-f]+)'
+      # Les liens des alertes Indeed passent par engage.indeed.com : l'adresse
+      # de l'offre y est codée et l'appli la décode (sans contacter Indeed).
+      motif_lien: 'indeed\.\w+/[^"\s?]*\?(?:[^"\s]*&)?v?jk=(?P<id>[0-9a-f]+)'
       url_offre: 'https://fr.indeed.com/viewjob?jk={id}'
 
 # =====================================================================

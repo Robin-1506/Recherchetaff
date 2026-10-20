@@ -13,6 +13,8 @@ des comptages et, si un e-mail n'a rien donné, la forme des liens trouvés
 (chiffres masqués, sans paramètres) pour pouvoir ajuster les motifs.
 """
 
+import base64
+import binascii
 import email
 import hashlib
 import imaplib
@@ -23,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from email.policy import default as politique_defaut
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from ..modele import detecter_contrat, detecter_teletravail, normaliser_texte, tronquer
 from ..recap import ENTETE_RECAP
@@ -94,10 +96,44 @@ def _generique(texte: str) -> bool:
     return normaliser_texte(texte) in _TEXTES_GENERIQUES or len(texte) < 3
 
 
+_URL_CACHEE = re.compile(rb"https?://[\x21-\x7e]+")
+
+
+def _adresses_cachees(href: str) -> list[str]:
+    """Adresses de destination codées en base64 dans un lien de suivi
+    (ex. Indeed : « engage.indeed.com/f/a/…~~/…~/<adresse codée> »).
+    Aucun site n'est contacté : on décode seulement le lien lui-même."""
+    try:
+        p = urlsplit(href)
+    except ValueError:
+        return []
+    segments = [s for s in p.path.split("/") if s]
+    # Un bloc base64 peut contenir des « / » : on essaie aussi les fins de chemin.
+    morceaux = ["/".join(segments[i:]) for i in range(len(segments))]
+    morceaux += [v for _, v in parse_qsl(p.query)]
+    trouvees = []
+    for m in morceaux:
+        m = m.strip("~=")
+        if len(m) < 16 or not re.fullmatch(r"[A-Za-z0-9+/_-]+", m):
+            continue
+        for decodeur in (base64.urlsafe_b64decode, base64.b64decode):
+            try:
+                brut = decodeur(m + "=" * (-len(m) % 4))
+            except (binascii.Error, ValueError):
+                continue
+            for url in _URL_CACHEE.findall(brut):
+                url = url.decode("ascii")
+                if url not in trouvees:
+                    trouvees.append(url)
+    return trouvees
+
+
 def _chercher_site(href: str, sites: list[dict]):
     """Renvoie (site, correspondance) si le lien (même déguisé dans un lien de
     suivi, encodé) correspond au motif d'un site."""
     candidats = [href, unquote(href), unquote(unquote(href))]
+    for cachee in _adresses_cachees(href):
+        candidats += [cachee, unquote(cachee)]
     for site in sites:
         for c in candidats:
             m = site["_motif"].search(c)
@@ -222,15 +258,26 @@ def convertir(extraite: dict, date_iso: str | None) -> dict:
     }
 
 
-def _forme_lien(href: str) -> str:
-    """Forme d'un lien pour le compte rendu public : domaine + chemin, chiffres masqués."""
+def _forme_lien(href: str, parametres: bool = False) -> str:
+    """Forme d'un lien pour le compte rendu public : domaine + chemin, chiffres
+    masqués ; avec « parametres », les noms des paramètres (jamais leurs valeurs)."""
     try:
         p = urlsplit(href)
     except ValueError:
         return "?"
-    # Les longs segments (jetons de suivi, parfois liés à l'abonné) sont masqués.
-    segments = ["…" if len(seg) > 24 else re.sub(r"\d", "9", seg) for seg in p.path.split("/")]
-    return f"{p.netloc}{'/'.join(segments)}"[:80]
+    # Les jetons de suivi (longs ou avec « ~ », parfois liés à l'abonné) sont masqués.
+    segments = ["…" if len(seg) > 24 or "~" in seg else re.sub(r"\d", "9", seg) for seg in p.path.split("/")]
+    forme = f"{p.netloc}{'/'.join(segments)}"[:80]
+    if parametres and p.query:
+        noms = [re.sub(r"[^\w-]", "", n)[:15] for n, _ in parse_qsl(p.query, keep_blank_values=True)]
+        forme += " ?" + "&".join(dict.fromkeys(n for n in noms if n))[:60]
+    return forme
+
+
+def _forme_diagnostic(href: str) -> str:
+    """Forme du lien, suivie de celle de sa destination si elle y est codée."""
+    cachees = _adresses_cachees(href)
+    return _forme_lien(href) + (f" → {_forme_lien(cachees[0], parametres=True)}" if cachees else "")
 
 
 def _corps(message) -> tuple[str, str]:
@@ -266,7 +313,7 @@ def analyser_message(brut: bytes, sites: list[dict]) -> tuple[list[dict], dict]:
     if not extraites and html:
         lecteur = _LecteurHTML()
         lecteur.feed(html)
-        formes = {_forme_lien(e["href"]) for e in lecteur.elements if e["type"] == "lien" and e["href"].startswith("http")}
+        formes = {_forme_diagnostic(e["href"]) for e in lecteur.elements if e["type"] == "lien" and e["href"].startswith("http")}
         diagnostic["formes"] = sorted(formes)[:15]
     return [convertir(e, date_iso) for e in extraites], diagnostic
 

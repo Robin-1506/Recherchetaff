@@ -266,6 +266,12 @@ déduit l'intitulé, l'entreprise et le lieu. Aucun site n'est consulté directe
   combien d'offres ont été trouvées. Si un e-mail n'a rien donné, il affiche la forme de ses
   liens (sans données personnelles). Il suffit alors d'ajouter ou d'ajuster un « motif » dans
   la section `alertes_email:` de `config/criteres.yaml`.
+- **Liens de suivi** : certains sites (Indeed, par exemple) cachent l'adresse de l'offre dans un
+  lien de suivi codé. Le programme la décode à partir du lien lui-même, sans contacter le site.
+  Le compte rendu affiche alors aussi la forme de l'adresse décodée (noms des paramètres
+  seulement, jamais leurs valeurs).
+- **Welcome to the Jungle** : leurs alertes sont suspendues pendant une refonte (octobre 2026).
+  Il suffira de les créer quand elles reviendront, rien n'est à changer dans le programme.
 
 Une offre vue seulement dans les alertes est considérée comme retirée au bout de 21 jours
 sans nouvelle mention.
