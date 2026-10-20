@@ -25,6 +25,17 @@ _DIPLOMES = [("Master", re.compile(r"\bmaster\b", re.IGNORECASE)),
              ("École d'ingénieur", re.compile(r"[ée]cole d['’]ing[ée]nieur", re.IGNORECASE))]
 
 
+def annees_minimum(offre: dict, texte: str) -> int | None:
+    """Années d'expérience minimum demandées (None si non précisé ou débutant accepté).
+    France Travail d'abord (« 3 An(s) », « 6 Mois »), sinon le texte de l'annonce."""
+    ft = (offre.get("exigences_ft") or {}).get("experience") or ""
+    if ft and "débutant" not in ft:
+        m = re.search(r"(\d+)\s*an", ft, re.IGNORECASE)
+        return int(m.group(1)) if m else 0  # « 6 mois » : moins d'un an
+    m = _EXPERIENCE.search(texte)
+    return int(m.group(1)) if m else None
+
+
 def experience(texte: str) -> str | None:
     m = _EXPERIENCE.search(texte)
     if m:
@@ -55,7 +66,8 @@ def analyser(offre: dict, groupes: dict) -> None:
         presents = [m for m in mots or [] if _contient(texte_n, m)]
         if presents:
             trouves[nom] = presents
-    offre["competences"] = {"groupes": trouves, "experience": experience(texte), "etudes": etudes(texte)}
+    offre["competences"] = {"groupes": trouves, "experience": experience(texte), "etudes": etudes(texte),
+                            "annees_min": annees_minimum(offre, texte)}
 
 
 def analyser_tout(donnees: dict, config: dict) -> None:

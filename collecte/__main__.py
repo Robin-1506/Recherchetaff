@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import competences, geo, recap, score, stockage
+from . import apprentissage, competences, geo, recap, score, stockage
 from .chiffrement import dechiffrer
 from .sources import adzuna, alertes_email, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
@@ -33,7 +33,8 @@ SOURCES = [france_travail, adzuna, jooble, alertes_email]
 log = logging.getLogger("collecte")
 
 
-def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | None = None) -> tuple[list[str], dict]:
+def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | None = None,
+           suivi: dict | None = None) -> tuple[list[str], dict]:
     """Lance toutes les sources, l'une après l'autre, et met à jour `donnees`.
     Renvoie le compte rendu (Markdown) et le statut des sources."""
     clients = clients or {}
@@ -75,13 +76,14 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
 
     compte_rendu += ["", geo.localiser(donnees, config, clients.get("geo"))]
 
-    repartition = score.noter_tout(donnees, config)
-    competences.analyser_tout(donnees, config)
+    competences.analyser_tout(donnees, config)  # avant le score : il utilise l'expérience demandée
+    repartition = score.noter_tout(donnees, config, maintenant)
     categories = [p["nom"] for p in (config.get("score") or {}).get("postes", [])] + [score.HORS_CIBLE]
     donnees["meta"]["categories"] = categories
     donnees["meta"]["centre"] = (config.get("recherche") or {}).get("centre") or list(geo.NANTES)
     compte_rendu += ["", "### Offres en ligne par poste cible", ""]
     compte_rendu += [f"- {c} : {repartition.get(c, 0)}" for c in categories]
+    compte_rendu += apprentissage.appliquer(donnees, suivi, config)
     compte_rendu += ["", geo.localiser_entreprises(donnees, config, clients.get("entreprises"))]
 
     stockage.alleger(donnees, maintenant)
@@ -98,6 +100,17 @@ def url_site(config: dict) -> str:
     return f"https://{proprietaire.lower()}.github.io/{depot}/" if depot else ""
 
 
+def charger_suivi(mot_de_passe: str) -> dict | None:
+    """Suivi des candidatures et choix ★ / Ignorer, écrits (chiffrés) par le site."""
+    if not CHEMIN_SUIVI.exists():
+        return None
+    try:
+        return dechiffrer(json.loads(CHEMIN_SUIVI.read_text(encoding="utf-8")), mot_de_passe)
+    except Exception:
+        log.warning("Suivi des candidatures illisible : ni relances ni apprentissage du score.")
+        return None
+
+
 def gerer_recap(config: dict, donnees: dict, maintenant: datetime, mot_de_passe: str) -> dict:
     """Prépare et envoie le récap. Renvoie un statut affichable (sans donnée personnelle)."""
     reglages = config.get("recap") or {}
@@ -112,13 +125,7 @@ def gerer_recap(config: dict, donnees: dict, maintenant: datetime, mot_de_passe:
         return {"ok": False, "non_configure": True, "envoye": False,
                 "message": "Récap non configuré (secrets GMAIL_ADRESSE, GMAIL_MOT_DE_PASSE_APPLI ou RECAP_DESTINATAIRE absents)."}
 
-    suivi = None
-    if CHEMIN_SUIVI.exists():
-        try:
-            suivi = dechiffrer(json.loads(CHEMIN_SUIVI.read_text(encoding="utf-8")), mot_de_passe)
-        except Exception:
-            log.warning("Suivi des candidatures illisible : le récap ne contiendra pas les relances.")
-
+    suivi = charger_suivi(mot_de_passe)
     horodatage = maintenant.isoformat(timespec="seconds")
     contenu = recap.preparer(donnees, suivi, horodatage, maintenant, reglages)
     if contenu is None:
@@ -147,7 +154,7 @@ def main() -> int:
     donnees = stockage.charger(CHEMIN_DONNEES, mot_de_passe)
     maintenant = datetime.now(timezone.utc)
 
-    compte_rendu, statut = lancer(config, donnees, maintenant)
+    compte_rendu, statut = lancer(config, donnees, maintenant, suivi=charger_suivi(mot_de_passe))
     ecrit = stockage.enregistrer(CHEMIN_DONNEES, donnees, mot_de_passe,
                                  precedentes if CHEMIN_DONNEES.exists() else None)
     compte_rendu.append("Données mises à jour." if ecrit else "Aucun changement dans les données.")

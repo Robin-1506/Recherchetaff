@@ -288,6 +288,7 @@ score:
   lieu:
     zone: 15           # Nantes et alentours (rayon de la recherche)
     teletravail_complet: 10   # ailleurs en France, en télétravail complet
+    teletravail_partiel: 3    # bonus pour le télétravail partiel (dans la zone)
 
   # Points selon le contrat. Les contrats non listés valent 0.
   contrats:
@@ -296,6 +297,43 @@ score:
     Autre: 6
     Freelance: 3
     Intérim: 3
+
+  # Expérience demandée : malus si l'offre en demande trop par rapport à toi.
+  experience:
+    mes_annees: 3        # ton expérience, en années
+    ecart_tolere: 3      # malus au-delà de mes_annees + ecart_tolere (ici : plus de 6 ans)
+    malus: 10
+    malus_fort: 20       # au-delà de mes_annees + 2 × ecart_tolere (ici : plus de 9 ans)
+
+  # Postes de direction (dans le titre) : malus.
+  postes_direction:
+    malus: 15
+    intitules:
+      - directeur
+      - directrice
+      - head of
+      - VP
+      - vice president
+      - chief
+      - CTO
+      - CPO
+      - CIO
+      - DSI
+      - directeur général
+
+  # Fraîcheur : bonus pour une offre récente, malus pour une offre ancienne.
+  fraicheur:
+    recente_jours: 7
+    bonus_recente: 5
+    ancienne_jours: 45
+    malus_ancienne: 5
+
+  # Apprentissage : le score s'ajuste d'après tes ★ Intéressante, tes
+  # candidatures et tes « Ignorer » (mots des intitulés et entreprises).
+  apprentissage:
+    actif: true
+    choix_minimum: 5     # nombre de choix avant que l'apprentissage ne démarre
+    points_max: 15       # ajustement maximum, en plus ou en moins
 
   # Offres « hors cible » : si l'une de ces expressions est dans le TITRE,
   # l'offre est déclassée (score divisé par 5) et classée hors cible.

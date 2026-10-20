@@ -38,7 +38,7 @@ def preparer(donnees: dict, suivi: dict | None, horodatage: str, maintenant: dat
         if o.get("premiere_vue") == horodatage and not o.get("expiree")
         and o.get("categorie") != HORS_CIBLE and o["id"] not in ignorees
     ]
-    nouvelles.sort(key=lambda o: (-(o.get("score") or 0), o.get("titre") or ""))
+    nouvelles.sort(key=lambda o: (-o.get("score_tri", o.get("score") or 0), o.get("titre") or ""))
     aujourdhui = maintenant.astimezone(PARIS).date().isoformat()
     relances = sorted(
         (c for c in (suivi.get("candidatures") or {}).values()

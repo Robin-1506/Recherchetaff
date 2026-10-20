@@ -84,3 +84,44 @@ def test_noter_tout():
                           {"titre": "Boulanger", "description": "", "contrat": "CDI", "hors_zone": False,
                            "expiree": True}]}
     assert score.noter_tout(donnees, CONFIG) == {"Product Owner": 1}
+
+
+def test_experience_trop_elevee():
+    base = noter(titre="Product Owner")["score"]
+    def avec(annees):
+        o = {"titre": "Product Owner", "description": "", "contrat": "CDI", "hors_zone": False,
+             "competences": {"annees_min": annees}}
+        score.noter(o, REGLES)
+        return o
+    assert avec(5)["score"] == base                 # 5 ans : dans ta portée
+    assert avec(7)["score"] == base - 10            # plus de 6 ans
+    assert avec(10)["score"] == base - 20           # plus de 9 ans
+    assert any("Expérience demandée" in d for d in avec(10)["score_detail"])
+
+
+def test_poste_de_direction():
+    assert noter(titre="Directeur produit - Product Owner")["score"] < noter(titre="Product Owner")["score"]
+
+
+def test_fraicheur():
+    from datetime import datetime, timezone
+    maintenant = datetime(2026, 10, 20, tzinfo=timezone.utc)
+    def age(date):
+        o = {"titre": "Product Owner", "description": "", "contrat": "CDI", "hors_zone": False,
+             "date_publication": date}
+        score.noter(o, REGLES, maintenant)
+        return o["score"]
+    recente, moyenne, ancienne = age("2026-10-18T08:00:00Z"), age("2026-10-01T08:00:00Z"), age("2026-08-01T08:00:00Z")
+    assert recente == moyenne + 5 and ancienne == moyenne - 5
+
+
+def test_teletravail_partiel():
+    assert noter(titre="Product Owner", teletravail="partiel")["score"] == noter(titre="Product Owner")["score"] + 3
+
+
+def test_classement_sans_plafond():
+    riche = noter(titre="Product Owner", teletravail="partiel",
+                  description="agile scrum backlog user stories recueil des besoins UX ergonomie tests utilisateurs")
+    simple = noter(titre="Product Owner", description="agile scrum backlog user stories recueil des besoins")
+    assert riche["score"] == simple["score"] == 100  # même note affichée…
+    assert riche["score_tri"] > simple["score_tri"]  # …mais la plus riche passe devant

@@ -137,6 +137,7 @@ async function demarrer(motDePasse, memoriser) {
   etat.offres = donnees.offres || [];
   etat.categories = (donnees.meta && donnees.meta.categories) || [];
   etat.centre = (donnees.meta && donnees.meta.centre) || [47.2184, -1.5536];
+  afficherFiabilite((donnees.meta && donnees.meta.fiabilite) || null);
 
   $("ecran-verrou").hidden = true;
   $("app").hidden = false;
@@ -213,7 +214,8 @@ function offresFiltrees() {
     .filter((o) => !texte || sansAccents([o.titre, o.entreprise, o.lieu, o.description].join(" ")).includes(texte))
     .sort((a, b) => {
       const parDate = (b.date_maj || "").localeCompare(a.date_maj || "");
-      return tri === "date" ? parDate : ((b.score ?? 0) - (a.score ?? 0)) || parDate;
+      const note = (o) => o.score_tri ?? o.score ?? 0; // note sans plafond, pour départager les « 100 »
+      return tri === "date" ? parDate : (note(b) - note(a)) || parDate;
     });
 }
 
@@ -251,6 +253,25 @@ function lienGoogleMaps(o) {
   const lieu = (o.etablissement && o.etablissement.adresse) || ville;
   const recherche = [o.entreprise, lieu].filter(Boolean).join(", ");
   return recherche ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(recherche)}` : null;
+}
+
+// --- Fiabilité du score -------------------------------------------------------
+
+function afficherFiabilite(f) {
+  const p = $("fiabilite");
+  const choix = f ? f.nb_aimees + f.nb_ignorees : 0;
+  if (!f || choix < 5) {
+    p.textContent = "📈 Marque des offres « ☆ Intéressante » ou « Ignorer » : à partir de 5 choix, "
+      + "le score apprendra de tes goûts (pris en compte à la collecte suivante).";
+    return;
+  }
+  const pluriel = f.ignorees_top > 1 ? "s" : "";
+  const phrases = [];
+  if (f.rang_aimees !== null && f.rang_aimees !== undefined) {
+    phrases.push(`tes offres aimées sont en moyenne dans les ${f.rang_aimees} % premières`);
+  }
+  phrases.push(`${f.ignorees_top} offre${pluriel} que tu as ignorée${pluriel} parmi les ${f.top} premières`);
+  p.textContent = `📈 Fiabilité du score, d'après tes ${choix} choix : ${phrases.join(" · ")}.`;
 }
 
 // --- Compétences ---------------------------------------------------------------
