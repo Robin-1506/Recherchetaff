@@ -183,7 +183,7 @@ def localiser_entreprises(donnees: dict, config: dict, session: requests.Session
 
     # Les offres les mieux notées d'abord (si le plafond de recherches est atteint).
     offres = sorted((o for o in donnees["offres"] if not o.get("expiree") and not o.get("hors_zone")),
-                    key=lambda o: -(o.get("score") or 0))
+                    key=lambda o: -o.get("score_tri", o.get("score") or 0))
     for offre in offres:
         nom = offre.get("entreprise")
         if not _mots(nom):

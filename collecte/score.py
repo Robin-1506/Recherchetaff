@@ -11,6 +11,8 @@ Champs ajoutés à l'offre :
     signalements   ex. ["Mission ESN / conseil"]
 """
 
+from datetime import datetime, timezone
+
 from .modele import normaliser_texte
 
 HORS_CIBLE = "Hors cible"
@@ -27,7 +29,19 @@ def _premier(texte_n: str, expressions) -> str | None:
     return next((e for e in expressions if _contient(texte_n, e)), None)
 
 
-def noter(offre: dict, regles: dict) -> None:
+def _age_jours(iso: str | None, maintenant: datetime | None) -> int | None:
+    if not iso or maintenant is None:
+        return None
+    try:
+        date = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if date.tzinfo is None:
+        date = date.replace(tzinfo=timezone.utc)
+    return (maintenant - date).days
+
+
+def noter(offre: dict, regles: dict, maintenant: datetime | None = None) -> None:
     titre_n = normaliser_texte(offre.get("titre"))
     desc_n = normaliser_texte(offre.get("description"))
     tout_n = f"{titre_n} {desc_n}"
@@ -69,6 +83,9 @@ def noter(offre: dict, regles: dict) -> None:
     elif offre.get("teletravail") == "complet":
         score += lieu.get("teletravail_complet", 0)
         detail.append(f"Lieu : télétravail complet +{lieu.get('teletravail_complet', 0)}")
+    if not offre.get("hors_zone") and offre.get("teletravail") == "partiel" and lieu.get("teletravail_partiel"):
+        score += lieu["teletravail_partiel"]
+        detail.append(f"Télétravail partiel +{lieu['teletravail_partiel']}")
 
     # 4. Contrat
     contrat = offre.get("contrat") or "Autre"
@@ -76,7 +93,37 @@ def noter(offre: dict, regles: dict) -> None:
     score += points_contrat
     detail.append(f"Contrat : {contrat} +{points_contrat}")
 
-    # 5. Exclusions (bruit) : déclassement
+    # 5. Expérience demandée trop élevée
+    exp = regles.get("experience") or {}
+    demandees = (offre.get("competences") or {}).get("annees_min")
+    if exp and demandees is not None:
+        mes, ecart = exp.get("mes_annees", 0), exp.get("ecart_tolere", 3)
+        if demandees > mes + 2 * ecart:
+            score -= exp.get("malus_fort", 20)
+            detail.append(f"Expérience demandée : {demandees} ans, bien au-delà des tiennes −{exp.get('malus_fort', 20)}")
+        elif demandees > mes + ecart:
+            score -= exp.get("malus", 10)
+            detail.append(f"Expérience demandée : {demandees} ans, au-delà des tiennes −{exp.get('malus', 10)}")
+
+    # 6. Poste de direction
+    direction = regles.get("postes_direction") or {}
+    trouve = _premier(titre_n, direction.get("intitules", []))
+    if trouve:
+        score -= direction.get("malus", 15)
+        detail.append(f"Poste de direction (« {trouve} ») −{direction.get('malus', 15)}")
+
+    # 7. Fraîcheur de l'offre
+    fraicheur = regles.get("fraicheur") or {}
+    age = _age_jours(offre.get("date_publication"), maintenant)
+    if fraicheur and age is not None:
+        if age <= fraicheur.get("recente_jours", 7):
+            score += fraicheur.get("bonus_recente", 5)
+            detail.append(f"Offre récente ({age} j) +{fraicheur.get('bonus_recente', 5)}")
+        elif age > fraicheur.get("ancienne_jours", 45):
+            score -= fraicheur.get("malus_ancienne", 5)
+            detail.append(f"Offre ancienne ({age} j) −{fraicheur.get('malus_ancienne', 5)}")
+
+    # 8. Exclusions (bruit) : déclassement
     exclusion = _premier(titre_n, regles.get("exclusions_titre", []))
     if contrat in (regles.get("contrats_exclus") or []):
         exclusion = exclusion or contrat.lower()
@@ -95,16 +142,19 @@ def noter(offre: dict, regles: dict) -> None:
 
     offre["categorie"] = categorie
     offre["score"] = max(0, min(100, round(score)))
+    # Pour classer : note sans plafond (plusieurs offres à « 100 » restent départagées).
+    offre["score_tri"] = round(score)
+    offre["score_base"] = offre["score_tri"]  # avant l'ajustement selon tes choix (apprentissage.py)
     offre["score_detail"] = detail
     offre["signalements"] = signalements
 
 
-def noter_tout(donnees: dict, config: dict) -> dict:
+def noter_tout(donnees: dict, config: dict, maintenant: datetime | None = None) -> dict:
     """Note toutes les offres. Renvoie le nombre d'offres actives par catégorie."""
     regles = config.get("score") or {}
     repartition: dict[str, int] = {}
     for offre in donnees["offres"]:
-        noter(offre, regles)
+        noter(offre, regles, maintenant)
         if not offre.get("expiree"):
             repartition[offre["categorie"]] = repartition.get(offre["categorie"], 0) + 1
     return repartition

@@ -117,6 +117,7 @@ input[type="password"], input[type="search"], select {
 .plus-filtres .filtres-ligne + .filtres-ligne { margin-top: 8px; }
 
 .compteur { color: var(--discret); font-size: .9rem; margin: 8px 0; }
+.fiabilite { margin: -4px 0 10px; font-size: .85rem; }
 
 .liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .offre {

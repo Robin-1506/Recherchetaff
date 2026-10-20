@@ -158,10 +158,31 @@ est divisé par 5. Sur le site, elles sont masquées par défaut : choisis « To
 offres » ou « Hors cible » dans la liste des postes pour les voir. Les missions en ESN
 ou en cabinet sont **signalées** par un badge, mais pas exclues.
 
-Dans chaque fiche, « Pourquoi … /100 ? » détaille le calcul.
+S'y ajoutent :
+- un **malus d'expérience** quand l'offre demande nettement plus d'années que toi (−10 au-delà de
+  6 ans, −20 au-delà de 9 ans avec les réglages actuels) et un malus pour les **postes de direction** ;
+- un bonus pour les **offres récentes** (moins de 7 jours), un malus pour les **anciennes** (plus de
+  45 jours), et un petit bonus pour le **télétravail partiel**.
+
+Dans chaque fiche, « Pourquoi … /100 ? » détaille le calcul. La note affichée est plafonnée à 100,
+mais le classement utilise la note complète : deux offres à « 100 » restent départagées.
+
+### Le score apprend de tes choix
+
+Chaque **☆ Intéressante**, chaque candidature envoyée et chaque **Ignorer** sert d'exemple. À la
+collecte suivante, les mots des intitulés et les entreprises qui reviennent surtout dans les offres
+que tu aimes font gagner des points (et ceux des offres que tu ignores en font perdre), jusqu'à
+±15. L'apprentissage démarre à partir de 5 choix ; plus tu tries, plus il est fiable. Une offre
+déjà classée n'est jamais ajustée par son propre choix (pas d'auto-renforcement).
+
+**Fiabilité** : sous le compteur d'offres, le site indique où se trouvent en moyenne tes offres
+aimées dans le classement, et combien d'offres ignorées restent parmi les 20 premières. Le
+compte rendu de chaque collecte donne la même mesure, avec et sans apprentissage.
 
 Tout se règle dans la section `score:` de `config/criteres.yaml` : ajouter un intitulé à
-un poste, changer des points, ajouter un mot-clé bonus (`mot: points`) ou une exclusion.
+un poste, changer des points, ajouter un mot-clé bonus (`mot: points`) ou une exclusion, ton
+nombre d'années d'expérience (`experience: mes_annees`), les seuils de fraîcheur, ou couper
+l'apprentissage (`apprentissage: actif: false`).
 Le nouveau calcul s'applique à toutes les offres, même anciennes, dès la collecte suivante.
 
 ---
