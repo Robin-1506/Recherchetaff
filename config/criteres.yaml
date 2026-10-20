@@ -98,10 +98,19 @@ alertes_email:
       motif_lien: 'hellowork\.com/\w{2}-\w{2}/emplois/(?P<id>\d+)'
       url_offre: 'https://www.hellowork.com/fr-fr/emplois/{id}.html'
     - nom: Indeed
-      # Les liens des alertes Indeed passent par engage.indeed.com : l'adresse
-      # de l'offre y est codée et l'appli la décode (sans contacter Indeed).
+      # Les liens des alertes Indeed passent par engage.indeed.com : voir
+      # « redirections » plus bas.
       motif_lien: 'indeed\.\w+/[^"\s?]*\?(?:[^"\s]*&)?v?jk=(?P<id>[0-9a-f]+)'
       url_offre: 'https://fr.indeed.com/viewjob?jk={id}'
+  # Liens de suivi qui ne contiennent pas l'adresse de l'offre : on demande au
+  # service de suivi où mène le lien et on lit seulement sa réponse (la page de
+  # l'offre n'est jamais ouverte). Seulement pour les e-mails de moins de
+  # « jours » jours, pour ne pas redemander chaque jour les mêmes liens.
+  redirections:
+    motifs:
+      - 'engage\.indeed\.com/f/a/'
+    jours: 2
+    maximum_par_collecte: 150
 
 # =====================================================================
 #  RÉCAP QUOTIDIEN PAR E-MAIL

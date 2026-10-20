@@ -10,12 +10,12 @@ CONFIG = yaml.safe_load((Path(__file__).parent.parent / "config" / "criteres.yam
 SITES = ae.preparer_sites(CONFIG)
 
 
-def message(html=None, texte=None, expediteur="jobalerts-noreply@linkedin.com"):
+def message(html=None, texte=None, expediteur="jobalerts-noreply@linkedin.com", date="Sat, 17 Oct 2026 08:00:00 +0200"):
     m = EmailMessage()
     m["From"] = f"LinkedIn <{expediteur}>"
     m["To"] = "veille@example.com"
     m["Subject"] = "Robin, 2 nouvelles offres"
-    m["Date"] = "Sat, 17 Oct 2026 08:00:00 +0200"
+    m["Date"] = date
     m.set_content(texte or "Version texte")
     if html:
         m.add_alternative(html, subtype="html")
@@ -139,13 +139,13 @@ def test_motif_du_refus_imap(monkeypatch):
 
 
 def _lien_engage(destination: str) -> str:
-    """Lien de suivi au format des alertes Indeed : adresse codée en base64 après des octets techniques."""
+    """Lien de suivi contenant l'adresse de destination codée en base64, après des octets techniques."""
     import base64
     bloc = base64.b64encode(b"F\x04i\x12\x9a\x0bP\x00D" + bytes([len(destination)]) + destination.encode() + b"W\x03spc")
     return f"https://engage.indeed.com/f/a/99iDAoiuuAxIa77XG2U1g~~/AAR4hBA~/{bloc.decode()}"
 
 
-def test_indeed_adresse_codee_dans_le_lien_de_suivi():
+def test_adresse_codee_dans_un_lien_de_suivi():
     html = f"""<table><tr><td><a href="{_lien_engage('https://fr.indeed.com/rc/clk/dl?jk=5f9c0a1b2c3d4e5f&from=ja&tk=XYZ')}">Product Owner (H/F)</a></td></tr>
     <tr><td>Banque Ouest - Nantes (44)</td></tr>
     <tr><td><a href="{_lien_engage('https://fr.indeed.com/alert/unsubscribe?id=ABC')}">Se désabonner</a></td></tr></table>"""
@@ -163,3 +163,72 @@ def test_diagnostic_montre_la_forme_de_la_destination_codee():
     _, diag = ae.analyser_message(message(html, expediteur="alert@jobalert.indeed.com"), SITES)
     assert diag["formes"] == ["engage.indeed.com/f/a/…/…/… → fr.indeed.com/inconnu/99999 ?xyz&u"]
     assert "SECRET" not in str(diag) and "moi@" not in str(diag)  # noms des paramètres seulement
+
+
+class FauxIndeed:
+    """Service de suivi : répond par une redirection, sans page."""
+
+    def __init__(self, destinations, code=302):
+        self.destinations = destinations
+        self.code = code
+        self.demandes = []
+
+    def head(self, url, allow_redirects, timeout):
+        assert allow_redirects is False  # on ne suit jamais jusqu'à la page de l'offre
+        self.demandes.append(url)
+
+        class Reponse:
+            status_code = self.code
+            headers = {"Location": self.destinations[url]} if url in self.destinations else {}
+        return Reponse()
+
+
+def _alerte_indeed(date):
+    from email.utils import format_datetime
+    from datetime import datetime, timezone
+    html = """<table><tr><td><a href="https://engage.indeed.com/f/a/AAA~~/BBB~/offre1">Product Owner (H/F)</a></td></tr>
+    <tr><td>Banque Ouest - Nantes (44)</td></tr>
+    <tr><td><a href="https://engage.indeed.com/f/a/AAA~~/BBB~/offre2">Chef de projet digital</a></td></tr>
+    <tr><td>Agence Loire - Saint-Herblain (44)</td></tr>
+    <tr><td><a href="https://engage.indeed.com/f/a/AAA~~/BBB~/desabo">Se désabonner</a></td></tr></table>"""
+    return message(html, expediteur="alert@jobalert.indeed.com", date=format_datetime(date or datetime.now(timezone.utc)))
+
+
+DESTINATIONS = {
+    "https://engage.indeed.com/f/a/AAA~~/BBB~/offre1": "https://fr.indeed.com/rc/clk/dl?jk=5f9c0a1b2c3d4e5f&from=ja&tk=X",
+    "https://engage.indeed.com/f/a/AAA~~/BBB~/offre2": "/f/a/AAA~~/BBB~/etape2",  # deuxième redirection, relative
+    "https://engage.indeed.com/f/a/AAA~~/BBB~/etape2": "https://fr.indeed.com/viewjob?jk=0123456789abcdef",
+}
+
+
+def test_indeed_destination_des_liens_de_suivi():
+    faux = FauxIndeed(DESTINATIONS)
+    redirections = ae.Redirections(CONFIG["alertes_email"]["redirections"]["motifs"], session=faux)
+    res = ae.collecter(CONFIG, messages=[_alerte_indeed(None)], redirections=redirections)
+    offres = sorted(res["offres"], key=lambda o: o["titre"])
+    assert [o["titre"] for o in offres] == ["Chef de projet digital", "Product Owner (H/F)"]
+    assert offres[1]["entreprise"] == "Banque Ouest"
+    assert offres[1]["sources"][0]["url"] == "https://fr.indeed.com/viewjob?jk=5f9c0a1b2c3d4e5f"
+    assert offres[0]["sources"][0]["url"] == "https://fr.indeed.com/viewjob?jk=0123456789abcdef"
+    assert not any("desabo" in u for u in faux.demandes)  # le lien de désabonnement n'est jamais touché
+    assert len(faux.demandes) == len(set(faux.demandes))  # chaque lien demandé une seule fois
+    assert any("Liens de suivi : 2 suivis" in ligne for ligne in res["details"])
+
+
+def test_indeed_e_mail_ancien_deja_traite_sans_nouvelle_demande():
+    from datetime import datetime, timedelta, timezone
+    faux = FauxIndeed(DESTINATIONS)
+    redirections = ae.Redirections(CONFIG["alertes_email"]["redirections"]["motifs"], session=faux)
+    vieux = _alerte_indeed(datetime.now(timezone.utc) - timedelta(days=5))
+    res = ae.collecter(CONFIG, messages=[vieux], redirections=redirections)
+    assert res["offres"] == [] and faux.demandes == []
+    assert any("déjà traité" in ligne for ligne in res["details"])
+
+
+def test_indeed_sans_redirection_diagnostic():
+    faux = FauxIndeed({}, code=200)
+    redirections = ae.Redirections(CONFIG["alertes_email"]["redirections"]["motifs"], session=faux)
+    res = ae.collecter(CONFIG, messages=[_alerte_indeed(None)], redirections=redirections)
+    assert res["offres"] == []
+    assert any("aucun lien d'offre reconnu" in ligne for ligne in res["details"])
+    assert any("codes 200×2" in ligne for ligne in res["details"])
