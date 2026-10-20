@@ -248,7 +248,8 @@ function distanceTexte(o) {
 // Lien Google Maps : recherche « entreprise, ville » (l'offre donne rarement l'adresse exacte).
 function lienGoogleMaps(o) {
   const ville = (o.lieu || "").replace(/^\s*\d{2,3}\s*-\s*/, "");
-  const recherche = [o.entreprise, ville].filter(Boolean).join(", ");
+  const lieu = (o.etablissement && o.etablissement.adresse) || ville;
+  const recherche = [o.entreprise, lieu].filter(Boolean).join(", ");
   return recherche ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(recherche)}` : null;
 }
 
@@ -285,6 +286,7 @@ function ouvrirFiche(o) {
     ["Mise à jour", date(o.date_maj)],
     ["Repérée le", date(o.premiere_vue)],
   ];
+  if (o.etablissement) infos.push(["Adresse", `${o.etablissement.adresse} (d'après l'annuaire des entreprises, à vérifier)`]);
   if (distanceTexte(o)) infos.push(["Distance", `${distanceTexte(o)} du centre de Nantes`]);
   if (o.expiree) infos.push(["Expirée le", date(o.date_expiration)]);
   $("fiche-infos").replaceChildren(...infos.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));

@@ -17,6 +17,8 @@ recherche:
   centre: [47.2184, -1.5536]
   # Rayon autour de la commune, en kilomètres.
   rayon_km: 30
+  # Départements de la zone (pour trouver l'adresse des entreprises).
+  departements: ["44", "85", "49"]
 
   # Mots-clés envoyés aux sources d'offres (une recherche par ligne).
   mots_cles:
