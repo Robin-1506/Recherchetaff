@@ -8,6 +8,11 @@ Repérage : chaque site a un « motif » d'adresse de lien (config/criteres.yaml
 Un lien qui correspond est une offre ; son texte est l'intitulé, et les
 lignes de texte qui suivent donnent l'entreprise et le lieu.
 
+Liens de suivi sans adresse lisible (Indeed) : on demande au service de suivi
+où mène le lien et on lit seulement sa réponse (l'adresse), sans ouvrir la
+page de destination. Seulement pour les e-mails récents, pour ne pas
+redemander chaque jour les mêmes liens (config : alertes_email.redirections).
+
 Le compte rendu (public) ne contient jamais le contenu des e-mails, seulement
 des comptages et, si un e-mail n'a rien donné, la forme des liens trouvés
 (chiffres masqués, sans paramètres) pour pouvoir ajuster les motifs.
@@ -21,11 +26,14 @@ import imaplib
 import logging
 import os
 import re
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from email.policy import default as politique_defaut
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from urllib.parse import parse_qsl, unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urljoin, urlsplit
+
+import requests
 
 from ..modele import detecter_contrat, detecter_teletravail, normaliser_texte, tronquer
 from ..recap import ENTETE_RECAP
@@ -44,6 +52,9 @@ _TEXTES_GENERIQUES = {
     "postuler maintenant", "en savoir plus", "decouvrir", "decouvrir l offre", "voir plus", "view job",
     "apply", "apply now", "see job", "see more", "candidature simplifiee", "consulter l offre",
 }
+# Liens à ne jamais suivre, même pour connaître leur destination.
+_LIENS_A_EVITER = re.compile(r"desabonn|desinscri|unsubscribe|preference|parametre|modifier|supprimer|settings",
+                             re.IGNORECASE)
 _SEPARATEURS = re.compile(r"\s+[·•|–—-]\s+")
 
 
@@ -100,8 +111,7 @@ _URL_CACHEE = re.compile(rb"https?://[\x21-\x7e]+")
 
 
 def _adresses_cachees(href: str) -> list[str]:
-    """Adresses de destination codées en base64 dans un lien de suivi
-    (ex. Indeed : « engage.indeed.com/f/a/…~~/…~/<adresse codée> »).
+    """Adresses de destination codées en base64 dans un lien de suivi.
     Aucun site n'est contacté : on décode seulement le lien lui-même."""
     try:
         p = urlsplit(href)
@@ -128,12 +138,69 @@ def _adresses_cachees(href: str) -> list[str]:
     return trouvees
 
 
-def _chercher_site(href: str, sites: list[dict]):
+class Redirections:
+    """Destination des liens de suivi : on demande au service de suivi où mène
+    le lien (réponse « redirection » de HTTP), sans jamais ouvrir la page de
+    destination. Chaque lien n'est demandé qu'une fois par collecte."""
+
+    MAX_ETAPES = 3
+
+    def __init__(self, motifs: list[str], session: requests.Session | None = None, maximum: int = 150):
+        self.motifs = [re.compile(m, re.IGNORECASE) for m in motifs]
+        self.session = session
+        self.maximum = maximum
+        self.connues: dict[str, str | None] = {}
+        self.demandes = 0
+        self.echecs = 0
+        self.codes: Counter = Counter()  # codes de réponse HTTP, pour le compte rendu
+
+    def concerne(self, href: str) -> bool:
+        return any(m.search(href) for m in self.motifs)
+
+    def destination(self, href: str, texte: str = "") -> str | None:
+        if not self.concerne(href) or _LIENS_A_EVITER.search(normaliser_texte(texte)):
+            return None
+        if href not in self.connues:
+            if self.demandes >= self.maximum:
+                return None
+            self.connues[href] = self._suivre(href)
+        return self.connues[href]
+
+    def _suivre(self, url: str) -> str | None:
+        self.session = self.session or requests.Session()
+        for _ in range(self.MAX_ETAPES):
+            self.demandes += 1
+            try:
+                # HEAD, et sans suivre la redirection : seule la réponse du
+                # service de suivi est lue, la page de l'offre n'est jamais ouverte.
+                r = self.session.head(url, allow_redirects=False, timeout=10)
+                if r.status_code in (403, 405):
+                    r = self.session.get(url, allow_redirects=False, timeout=10, stream=True)
+                    r.close()
+            except requests.RequestException:
+                self.echecs += 1
+                return None
+            self.codes[r.status_code] += 1
+            suivante = r.headers.get("Location")
+            if not (300 <= r.status_code < 400 and suivante):
+                self.echecs += 1
+                return None
+            url = urljoin(url, suivante)
+            if not self.concerne(url):
+                return url
+        return None
+
+
+def _chercher_site(href: str, sites: list[dict], resoudre=None, texte: str = ""):
     """Renvoie (site, correspondance) si le lien (même déguisé dans un lien de
-    suivi, encodé) correspond au motif d'un site."""
+    suivi, encodé) correspond au motif d'un site. « resoudre » donne, si besoin,
+    la destination d'un lien de suivi (voir Redirections)."""
     candidats = [href, unquote(href), unquote(unquote(href))]
     for cachee in _adresses_cachees(href):
         candidats += [cachee, unquote(cachee)]
+    destination = resoudre(href, texte) if resoudre else None
+    if destination:
+        candidats += [destination, unquote(destination)]
     for site in sites:
         for c in candidats:
             m = site["_motif"].search(c)
@@ -142,7 +209,7 @@ def _chercher_site(href: str, sites: list[dict]):
     return None, None
 
 
-def extraire_offres_html(html: str, sites: list[dict]) -> list[dict]:
+def extraire_offres_html(html: str, sites: list[dict], resoudre=None) -> list[dict]:
     lecteur = _LecteurHTML()
     lecteur.feed(html)
     elements = lecteur.elements
@@ -151,7 +218,7 @@ def extraire_offres_html(html: str, sites: list[dict]) -> list[dict]:
     for i, el in enumerate(elements):
         if el["type"] != "lien":
             continue
-        site, m = _chercher_site(el["href"], sites)
+        site, m = _chercher_site(el["href"], sites, resoudre, el["texte"])
         if not site:
             continue
         cle = (site["nom"], m.group("id"))
@@ -166,20 +233,20 @@ def extraire_offres_html(html: str, sites: list[dict]) -> list[dict]:
         texte = el["texte"]
         if texte and not _generique(texte):
             offre["titre"] = texte
-            offre["infos"] = _textes_suivants(elements, i, sites, texte)
+            offre["infos"] = _textes_suivants(elements, i, sites, texte, resoudre)
         else:
             # Bouton « Voir l'offre » : l'intitulé est juste avant.
-            precedents = _textes_precedents(elements, i, sites)
+            precedents = _textes_precedents(elements, i, sites, resoudre)
             if precedents:
                 offre["titre"] = precedents[0]
                 offre["infos"] = precedents[1:]
     return [trouvees[c] for c in ordre if trouvees[c]["titre"]]
 
 
-def _textes_suivants(elements, i, sites, titre, nb=4) -> list[str]:
+def _textes_suivants(elements, i, sites, titre, resoudre=None, nb=4) -> list[str]:
     infos = []
     for el in elements[i + 1:]:
-        if el["type"] == "lien" and _chercher_site(el["href"], sites)[0]:
+        if el["type"] == "lien" and _chercher_site(el["href"], sites, resoudre, el["texte"])[0]:
             break  # offre suivante
         t = el.get("texte", "")
         if t and t != titre and not _generique(t) and len(t) <= 150:
@@ -189,10 +256,10 @@ def _textes_suivants(elements, i, sites, titre, nb=4) -> list[str]:
     return infos
 
 
-def _textes_precedents(elements, i, sites, nb=3) -> list[str]:
+def _textes_precedents(elements, i, sites, resoudre=None, nb=3) -> list[str]:
     textes = []
     for el in reversed(elements[max(0, i - 8):i]):
-        if el["type"] == "lien" and _chercher_site(el["href"], sites)[0] and textes:
+        if el["type"] == "lien" and textes and _chercher_site(el["href"], sites, resoudre, el["texte"])[0]:
             break
         t = el.get("texte", "")
         if t and not _generique(t) and len(t) <= 150:
@@ -274,10 +341,12 @@ def _forme_lien(href: str, parametres: bool = False) -> str:
     return forme
 
 
-def _forme_diagnostic(href: str) -> str:
-    """Forme du lien, suivie de celle de sa destination si elle y est codée."""
-    cachees = _adresses_cachees(href)
-    return _forme_lien(href) + (f" → {_forme_lien(cachees[0], parametres=True)}" if cachees else "")
+def _forme_diagnostic(href: str, redirections: "Redirections | None" = None) -> str:
+    """Forme du lien, suivie de celle de sa destination si elle est connue."""
+    destinations = _adresses_cachees(href)
+    if redirections and redirections.connues.get(href):
+        destinations.insert(0, redirections.connues[href])
+    return _forme_lien(href) + (f" → {_forme_lien(destinations[0], parametres=True)}" if destinations else "")
 
 
 def _corps(message) -> tuple[str, str]:
@@ -297,8 +366,11 @@ def _corps(message) -> tuple[str, str]:
     return html, texte
 
 
-def analyser_message(brut: bytes, sites: list[dict]) -> tuple[list[dict], dict]:
-    """Extrait les offres d'un e-mail. Renvoie (offres, diagnostic)."""
+def analyser_message(brut: bytes, sites: list[dict], redirections: Redirections | None = None,
+                     jours_redirections: int = 2) -> tuple[list[dict], dict]:
+    """Extrait les offres d'un e-mail. Renvoie (offres, diagnostic).
+    Les liens de suivi ne sont suivis que pour les e-mails de moins de
+    « jours_redirections » jours (les plus anciens ont déjà été traités)."""
     message = email.message_from_bytes(brut, policy=politique_defaut)
     try:
         date_iso = parsedate_to_datetime(message["Date"]).astimezone(timezone.utc).isoformat(timespec="seconds")
@@ -308,12 +380,19 @@ def analyser_message(brut: bytes, sites: list[dict]) -> tuple[list[dict], dict]:
     if message.get(ENTETE_RECAP):  # notre propre récap quotidien
         return [], {"expediteur": expediteur, "nb": 0, "formes": [], "ignore": True}
     html, texte = _corps(message)
-    extraites = extraire_offres_html(html, sites) if html else extraire_offres_texte(texte, sites)
+    recent = date_iso is not None and \
+        datetime.fromisoformat(date_iso) >= datetime.now(timezone.utc) - timedelta(days=jours_redirections)
+    resoudre = redirections.destination if redirections and recent else None
+    extraites = extraire_offres_html(html, sites, resoudre) if html else extraire_offres_texte(texte, sites)
     diagnostic = {"expediteur": expediteur, "nb": len(extraites), "formes": []}
     if not extraites and html:
         lecteur = _LecteurHTML()
         lecteur.feed(html)
-        formes = {_forme_diagnostic(e["href"]) for e in lecteur.elements if e["type"] == "lien" and e["href"].startswith("http")}
+        liens = [e["href"] for e in lecteur.elements if e["type"] == "lien" and e["href"].startswith("http")]
+        if redirections and not recent and any(redirections.concerne(h) for h in liens):
+            diagnostic["deja_traite"] = True  # liens de suivi déjà suivis lors d'une collecte précédente
+            return [], diagnostic
+        formes = {_forme_diagnostic(h, redirections) for h in liens}
         diagnostic["formes"] = sorted(formes)[:15]
     return [convertir(e, date_iso) for e in extraites], diagnostic
 
@@ -353,9 +432,13 @@ def lire_boite(adresse: str, mot_de_passe: str, jours: int) -> list[bytes]:
         raise ErreurSource(f"Gmail injoignable : {e.__class__.__name__}") from e
 
 
-def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
+def collecter(config: dict, messages: list[bytes] | None = None, redirections: Redirections | None = None) -> dict:
     reglages = config.get("alertes_email") or {}
     sites = preparer_sites(config)
+    reglages_redir = reglages.get("redirections") or {}
+    if redirections is None and reglages_redir.get("motifs"):
+        redirections = Redirections(reglages_redir["motifs"], maximum=reglages_redir.get("maximum_par_collecte", 150))
+    jours_redir = reglages_redir.get("jours", 2)
     if messages is None:
         adresse = os.environ.get("GMAIL_ADRESSE")
         mot_de_passe = os.environ.get("GMAIL_MOT_DE_PASSE_APPLI")
@@ -368,7 +451,7 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
     details = []
     for brut in messages:
         try:
-            extraites, diag = analyser_message(brut, sites)
+            extraites, diag = analyser_message(brut, sites, redirections, jours_redir)
         except Exception as e:  # un e-mail illisible ne bloque pas les autres
             log.warning("E-mail illisible : %s", e)
             continue
@@ -377,11 +460,17 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
         for o in extraites:
             offres.setdefault(o["id"], o)
         ligne = f"- e-mail de *{diag['expediteur']}* : {diag['nb']} offres"
-        if diag["formes"]:
+        if diag.get("deja_traite"):
+            ligne = f"- e-mail de *{diag['expediteur']}* : déjà traité lors d'une collecte précédente"
+        elif diag["formes"]:
             ligne += " — aucun lien d'offre reconnu ; liens présents : " + ", ".join(f"`{f}`" for f in diag["formes"])
         details.append(ligne)
 
     details = ["", f"### Alertes e-mail : {len(details)} e-mails analysés", ""] + details
+    if redirections and redirections.demandes:
+        details.append(f"- Liens de suivi : {len(redirections.connues)} suivis "
+                       f"({redirections.demandes} demandes, {redirections.echecs} sans réponse utile ; codes "
+                       + ", ".join(f"{c}×{n}" for c, n in sorted(redirections.codes.items())) + ")")
     return {
         "offres": list(offres.values()),
         "avertissements": [],
