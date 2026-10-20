@@ -1,38 +1,38 @@
 {
-  "derniere_collecte": "2026-10-20T19:24:09+00:00",
+  "derniere_collecte": "2026-10-20T20:04:10+00:00",
   "sources": {
     "france_travail": {
       "nom": "France Travail",
       "ok": true,
-      "date": "2026-10-20T19:24:09+00:00",
+      "date": "2026-10-20T20:04:10+00:00",
       "nb_offres": 86,
       "message": ""
     },
     "adzuna": {
       "nom": "Adzuna",
       "ok": true,
-      "date": "2026-10-20T19:24:09+00:00",
+      "date": "2026-10-20T20:04:10+00:00",
       "nb_offres": 378,
       "message": ""
     },
     "jooble": {
       "nom": "Jooble",
       "ok": true,
-      "date": "2026-10-20T19:24:09+00:00",
-      "nb_offres": 554,
+      "date": "2026-10-20T20:04:10+00:00",
+      "nb_offres": 558,
       "message": ""
     },
     "alertes_email": {
       "nom": "Alertes e-mail",
       "ok": false,
-      "date": "2026-10-20T19:24:09+00:00",
+      "date": "2026-10-20T20:04:10+00:00",
       "nb_offres": 0,
       "message": "Connexion à Gmail refusée (réponse de Google : [AUTHENTICATIONFAILED] Invalid credentials (Failure)). Vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI (mot de passe d'application, pas le mot de passe du compte)."
     }
   },
   "recap": {
-    "ok": false,
+    "ok": true,
     "envoye": false,
-    "message": "Envoi du récap impossible : identification refusée par Gmail : vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI (code 535, réponse de Google : 5.7.8 Username and Password not accepted. For more information, go to 5.7.8 https://support.google.com/mail/?p=BadCredentials 586e51a60fabf-4a7d5ebc240sm318751fac.2 - gsmtp)."
+    "message": "Collecte lancée à la main : pas de récap."
   }
 }
