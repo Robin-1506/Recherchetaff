@@ -5,8 +5,8 @@ sources, autour de Nantes (et en télétravail complet en France), et les affich
 sur un site web protégé par un mot de passe.
 
 > **Fonctionnalités :** sources France Travail, Adzuna, Jooble et alertes e-mail,
-> fusion des doublons, score par poste cible, carte des offres, suivi des
-> candidatures, récap quotidien par e-mail, site web. (L'analyse IA avec le CV, envisagée au départ,
+> fusion des doublons, score par poste cible, compétences demandées, carte des
+> offres, suivi des candidatures, récap quotidien par e-mail, site web. (L'analyse IA avec le CV, envisagée au départ,
 > n'a pas été retenue.)
 
 ---
@@ -54,6 +54,22 @@ Quelques règles d'écriture :
 
 Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajoute une ligne
 `    - scrum master` dans la liste `mots_cles` (avec 4 espaces avant le tiret, comme les autres).
+
+---
+
+## Compétences demandées
+
+Chaque fiche d'offre contient un encadré **« Compétences demandées »** (et la liste montre
+les principales, après 🧩) :
+- **Selon France Travail** : les compétences exigées et souhaitées, l'expérience, la formation,
+  les langues, le permis et les savoir-être, tels que France Travail les fournit ;
+- **Repérées dans le texte de l'annonce** (toutes sources) : méthodes, outils, savoir-faire,
+  certifications et langues trouvés dans l'annonce, plus l'expérience (« 3 ans d'expérience »,
+  « débutant accepté ») et le niveau d'études (« Bac+5 »).
+
+Les mots repérés sont dans la section `competences:` de `config/criteres.yaml` : ajoute un mot
+dans un groupe (ou crée un groupe) pour qu'il soit repéré dès la collecte suivante. Ce n'est
+pas un résumé rédigé : une compétence absente de la liste n'est pas repérée dans le texte.
 
 ---
 

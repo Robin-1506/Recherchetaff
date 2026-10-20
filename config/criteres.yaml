@@ -114,6 +114,86 @@ recap:
   nb_meilleures: 5
 
 # =====================================================================
+#  COMPÉTENCES REPÉRÉES DANS LES ANNONCES
+# ---------------------------------------------------------------------
+#  Affichées dans la fiche de chaque offre (encadré « Compétences
+#  demandées »). Ajoute un mot dans le bon groupe pour qu'il soit repéré ;
+#  tu peux aussi créer un nouveau groupe. Majuscules et accents ignorés.
+# =====================================================================
+competences:
+  Méthodes:
+    - agile
+    - scrum
+    - kanban
+    - SAFe
+    - lean
+    - cycle en V
+    - design thinking
+    - DevOps
+    - ITIL
+    - Prince2
+  Outils:
+    - Jira
+    - Confluence
+    - Azure DevOps
+    - Trello
+    - Notion
+    - Miro
+    - Figma
+    - Sketch
+    - Axure
+    - Balsamiq
+    - Power BI
+    - Tableau
+    - SQL
+    - Excel
+    - SAP
+    - Salesforce
+    - ServiceNow
+    - Google Analytics
+  Savoir-faire:
+    - recueil des besoins
+    - expression des besoins
+    - user stories
+    - user story
+    - backlog
+    - priorisation
+    - roadmap
+    - spécifications fonctionnelles
+    - cahier des charges
+    - recette
+    - tests utilisateurs
+    - tests d'acceptation
+    - ateliers
+    - conduite du changement
+    - pilotage
+    - gestion de projet
+    - budget
+    - KPI
+    - UX research
+    - prototypage
+    - wireframes
+    - maquettes
+    - accessibilité
+    - RGAA
+    - UML
+    - BPMN
+    - modélisation
+    - API
+  Certifications:
+    - PSPO
+    - CSPO
+    - PSM
+    - CSM
+    - PMP
+    - SAFe POPM
+  Langues:
+    - anglais
+    - espagnol
+    - allemand
+    - italien
+
+# =====================================================================
 #  SCORE DE PERTINENCE (sur 100)
 # ---------------------------------------------------------------------
 #  score = points du poste cible + bonus mots-clés + lieu + contrat
