@@ -253,6 +253,55 @@ function lienGoogleMaps(o) {
   return recherche ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(recherche)}` : null;
 }
 
+// --- Compétences ---------------------------------------------------------------
+
+const GROUPES_APERCU = ["Méthodes", "Outils", "Savoir-faire", "Certifications"];
+
+function apercuCompetences(o) {
+  const groupes = (o.competences && o.competences.groupes) || {};
+  const mots = GROUPES_APERCU.flatMap((g) => groupes[g] || []).slice(0, 5);
+  return mots.length ? `🧩 ${mots.join(" · ")}` : null;
+}
+
+function puces(mots, classe = "") {
+  return el("span", { class: "badges" }, mots.map((m) => el("span", { class: `badge ${classe}` }, m)));
+}
+
+function afficherCompetences(o) {
+  const blocs = [];
+  const ft = o.exigences_ft;
+  if (ft) {
+    const lignes = [
+      ["Exigées", ft.exigees && puces(ft.exigees, "exigee")],
+      ["Souhaitées", ft.souhaitees && puces(ft.souhaitees)],
+      ["Expérience", ft.experience],
+      ["Formation", ft.formations && ft.formations.join(" ; ")],
+      ["Langues", ft.langues && ft.langues.join(", ")],
+      ["Permis", ft.permis && ft.permis.join(", ")],
+      ["Outils", ft.outils && puces(ft.outils)],
+      ["Savoir-être", ft.savoir_etre && puces(ft.savoir_etre)],
+    ].filter(([, v]) => v);
+    if (lignes.length) {
+      blocs.push(el("p", { class: "discret" }, "Selon France Travail :"),
+        el("dl", { class: "infos" }, lignes.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])));
+    }
+  }
+  const c = o.competences;
+  if (c) {
+    const lignes = [
+      ...Object.entries(c.groupes || {}).map(([g, mots]) => [g, puces(mots)]),
+      ["Expérience", c.experience],
+      ["Études", c.etudes],
+    ].filter(([, v]) => v);
+    if (lignes.length) {
+      blocs.push(el("p", { class: "discret" }, ft ? "Repérées aussi dans le texte de l'annonce :" : "Repérées dans le texte de l'annonce :"),
+        el("dl", { class: "infos" }, lignes.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])));
+    }
+  }
+  $("competences-contenu").replaceChildren(...blocs);
+  $("fiche-competences").hidden = !blocs.length;
+}
+
 function afficherListe() {
   const offres = offresFiltrees();
   const nb = offres.length;
@@ -266,6 +315,7 @@ function afficherListe() {
       el("span", { class: "offre-titre" }, o.titre),
       el("span", { class: "offre-ligne" }, [o.entreprise || "Entreprise non précisée", o.lieu].filter(Boolean).join(" · ")),
       el("span", { class: "offre-ligne" }, [`Mise à jour le ${date(o.date_maj)}`, distanceTexte(o)].filter(Boolean).join(" · ")),
+      apercuCompetences(o) && el("span", { class: "offre-ligne apercu-competences" }, apercuCompetences(o)),
       el("span", { class: "badges" }, badges(o)),
     ),
   )));
@@ -290,6 +340,8 @@ function ouvrirFiche(o) {
   if (distanceTexte(o)) infos.push(["Distance", `${distanceTexte(o)} du centre de Nantes`]);
   if (o.expiree) infos.push(["Expirée le", date(o.date_expiration)]);
   $("fiche-infos").replaceChildren(...infos.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
+
+  afficherCompetences(o);
 
   const detail = $("fiche-score");
   detail.hidden = !o.score_detail;

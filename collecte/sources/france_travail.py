@@ -121,6 +121,40 @@ def _total(content_range: str) -> int | None:
         return None
 
 
+_EXPERIENCE = {"D": "débutant accepté", "S": "souhaitée", "E": "exigée"}
+
+
+def _exigences(brute: dict) -> dict:
+    """Compétences structurées fournies par France Travail (exigées / souhaitées,
+    expérience, formation, langues, permis, savoir-être)."""
+    def libelles(cle, exigence=None):
+        return [x["libelle"] for x in brute.get(cle) or []
+                if x.get("libelle") and (exigence is None or x.get("exigence") == exigence)]
+
+    def avec_exigence(cle, nom_libelle="libelle"):
+        resultat = []
+        for x in brute.get(cle) or []:
+            texte = " ".join(v for v in (x.get("niveauLibelle"), x.get("domaineLibelle"), x.get(nom_libelle)) if v)
+            if texte:
+                resultat.append(texte + (" (exigé)" if x.get("exigence") == "E" else " (souhaité)"))
+        return resultat
+
+    exigences = {
+        "exigees": libelles("competences", "E"),
+        "souhaitees": libelles("competences", "S"),
+        "savoir_etre": libelles("qualitesProfessionnelles"),
+        "formations": avec_exigence("formations", "commentaire"),
+        "langues": avec_exigence("langues"),
+        "permis": avec_exigence("permis"),
+        "outils": [o for o in brute.get("outilsBureautiques") or [] if isinstance(o, str)],
+    }
+    experience = brute.get("experienceLibelle")
+    if experience:
+        precision = _EXPERIENCE.get(brute.get("experienceExige"), "")
+        exigences["experience"] = experience.replace("An(s)", "an(s)") + (f" ({precision})" if precision else "")
+    return {k: v for k, v in exigences.items() if v}
+
+
 def convertir(brute: dict, hors_zone: bool = False) -> dict:
     """Transforme une offre France Travail au format commun."""
     id_ft = brute["id"]
@@ -158,6 +192,9 @@ def convertir(brute: dict, hors_zone: bool = False) -> dict:
             }
         ],
     }
+    exigences_ft = _exigences(brute)
+    if exigences_ft:
+        offre["exigences_ft"] = exigences_ft
     if lieu.get("latitude") is not None and lieu.get("longitude") is not None:
         offre["coordonnees"] = [round(float(lieu["latitude"]), 5), round(float(lieu["longitude"]), 5)]
     return offre
