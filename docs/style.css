@@ -270,3 +270,16 @@ a.bouton-discret { text-decoration: none; display: inline-flex; align-items: cen
   .entete-boutons .bouton-discret { padding: 5px 8px; font-size: .85rem; }
   .fiche { width: 100vw; max-width: 100vw; height: 100dvh; border-radius: 0; margin: 0; }
 }
+
+/* Grand écran : page plus large, offres sur 2 colonnes, filtres sur une ligne */
+@media (min-width: 1100px) {
+  #app { max-width: 1280px; padding: 24px 32px; }
+  .filtres { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr); align-items: center; }
+  .filtres > .plus-filtres { grid-column: 1 / -1; }
+  .filtres-ligne select { flex-basis: 160px; }
+  #liste { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #liste > li { display: flex; }
+  #liste .offre { height: 100%; }
+  .carte-offres { height: min(78vh, 820px); }
+  .kanban { gap: 14px; }
+}
