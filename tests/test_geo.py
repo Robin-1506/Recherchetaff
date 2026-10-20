@@ -87,3 +87,82 @@ def test_service_en_panne_ne_bloque_rien():
     assert len(session.questions) == 1  # on n'insiste pas
     assert donnees["meta"]["geocache"] == {}  # rien de mis en cache : nouvel essai la prochaine fois
     assert "indisponible" in ligne
+
+
+ANNUAIRE = {
+    "capgemini": [{"nom_complet": "CAPGEMINI TECHNOLOGY SERVICES", "sigle": None, "siege": {},
+                   "matching_etablissements": [
+                       {"latitude": "47.2063", "longitude": "-1.5640", "adresse": "1 RUE DE NANTES 44000 NANTES",
+                        "est_siege": False, "etat_administratif": "A"},
+                       {"latitude": "47.2490", "longitude": "-1.4810", "adresse": "5 ROUTE DE CARQUEFOU 44470 CARQUEFOU",
+                        "est_siege": False, "etat_administratif": "A"},
+                       {"latitude": "47.3", "longitude": "-1.5", "adresse": "FERMÉ", "etat_administratif": "F"}]}],
+    "orange": [{"nom_complet": "ORANGE", "siege": {"liste_enseignes": ["ORANGE"]},
+                "matching_etablissements": [
+                    {"latitude": "47.2120", "longitude": "-1.6500", "adresse": "ZAC ATLANTIS 44800 SAINT-HERBLAIN",
+                     "est_siege": False}]}],
+    # « ACME » renvoie une autre entreprise : le nom ne correspond pas, on n'invente rien.
+    "acme": [{"nom_complet": "BOULANGERIE DUPONT", "matching_etablissements": [
+        {"latitude": "47.21", "longitude": "-1.55", "adresse": "PLACE DU MARCHÉ 44000 NANTES"}]}],
+}
+
+
+class FauxAnnuaire:
+    def __init__(self, en_panne=False):
+        self.questions = []
+        self.en_panne = en_panne
+
+    def get(self, url, params=None, timeout=None):
+        assert url == geo.URL_ENTREPRISES
+        self.questions.append((params["q"], params["departement"]))
+        if self.en_panne:
+            raise requests.ConnectionError("hors ligne")
+        return Reponse({"results": ANNUAIRE.get(normaliser_texte(params["q"]), [])})
+
+
+def test_noms_correspondent():
+    assert geo.noms_correspondent("Capgemini", ["CAPGEMINI TECHNOLOGY SERVICES"])
+    assert geo.noms_correspondent("ORANGE SA", ["ORANGE"])
+    assert not geo.noms_correspondent("ACME", ["BOULANGERIE DUPONT"])
+    assert not geo.noms_correspondent(None, ["X"])
+
+
+def test_localiser_entreprises():
+    nantes, herblain = [47.2184, -1.5536], [47.2122, -1.6497]
+    donnees = {"meta": {}, "offres": [
+        {"id": "1", "entreprise": "Capgemini", "lieu": "44 - NANTES", "coordonnees": nantes, "score": 90},
+        {"id": "2", "entreprise": "CAPGEMINI", "lieu": "44 - CARQUEFOU", "coordonnees": [47.2975, -1.4919], "score": 80},
+        {"id": "3", "entreprise": "Orange SA", "lieu": "Saint-Herblain", "coordonnees": herblain, "score": 70},
+        {"id": "4", "entreprise": "ACME", "lieu": "44 - NANTES", "coordonnees": nantes, "score": 60},
+        {"id": "5", "entreprise": None, "lieu": "Nantes", "coordonnees": nantes},
+        {"id": "6", "entreprise": "Capgemini", "lieu": "75 - PARIS", "hors_zone": True},
+    ]}
+    annuaire = FauxAnnuaire()
+    ligne = geo.localiser_entreprises(donnees, {"recherche": {"departements": ["44", "85"]}}, annuaire)
+    o = {x["id"]: x for x in donnees["offres"]}
+    # Chaque offre prend l'établissement le plus proche de sa ville ; l'établissement fermé est ignoré.
+    assert o["1"]["etablissement"]["adresse"].endswith("44000 NANTES")
+    assert o["2"]["etablissement"]["adresse"].endswith("CARQUEFOU")
+    assert o["1"]["etablissement"]["nb_proches"] == 2
+    assert o["3"]["etablissement"]["adresse"].startswith("ZAC ATLANTIS")
+    assert o["3"]["distance_km"] == 7
+    assert "etablissement" not in o["4"] and "etablissement" not in o["5"] and "etablissement" not in o["6"]
+    # Une recherche par entreprise et par département ; « 44 » lu dans le lieu France Travail.
+    assert ("Capgemini", "44") in annuaire.questions
+    assert ("Orange", "44,85") in annuaire.questions  # « SA » retiré de la recherche
+    assert len(annuaire.questions) == 3
+    assert ligne.startswith("Adresses d'entreprises : 3/5 offres de la zone placées")
+
+    # Collecte suivante : tout vient du cache.
+    annuaire2 = FauxAnnuaire()
+    geo.localiser_entreprises(donnees, {"recherche": {"departements": ["44", "85"]}}, annuaire2)
+    assert annuaire2.questions == []
+
+
+def test_annuaire_en_panne():
+    donnees = {"meta": {}, "offres": [{"id": "1", "entreprise": "Capgemini", "lieu": "44 - NANTES"},
+                                      {"id": "2", "entreprise": "Orange", "lieu": "44 - NANTES"}]}
+    annuaire = FauxAnnuaire(en_panne=True)
+    ligne = geo.localiser_entreprises(donnees, {}, annuaire)
+    assert len(annuaire.questions) == 1 and donnees["meta"]["entreprises"] == {}
+    assert "indisponible" in ligne

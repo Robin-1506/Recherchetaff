@@ -64,9 +64,14 @@ Exemple : pour ajouter « scrum master » aux recherches autour de Nantes, ajout
   regroupés ; leur couleur suit le score (vert ≥ 70, orange ≥ 45, gris en dessous). Un clic
   ouvre un résumé puis la fiche.
 - La liste et les fiches indiquent la **distance depuis le centre de Nantes**.
-- Dans chaque fiche, le bouton **📍 Google Maps** recherche « entreprise, ville » : c'est le
-  moyen de trouver l'adresse précise et l'itinéraire, car les offres ne donnent le plus
-  souvent que la ville.
+- **Adresse des entreprises** : pour les offres de la zone, le programme cherche l'entreprise
+  dans l'**annuaire public des entreprises** (API Recherche d'entreprises de l'État, gratuite) et
+  garde son établissement le plus proche de la ville de l'offre. Sur la carte, ces offres sont
+  des **points pleins** placés à l'adresse ; les autres sont des **points en pointillé** au centre
+  de leur ville. L'adresse est à vérifier : pour une ESN ou un cabinet, c'est leur adresse et non
+  celle du client, et une grande entreprise peut avoir plusieurs sites (la fiche le signale).
+- Dans chaque fiche, le bouton **📍 Google Maps** recherche l'entreprise à cette adresse (ou dans
+  sa ville), pour l'itinéraire.
 
 Les coordonnées viennent de France Travail et d'Adzuna quand elles les fournissent ; sinon,
 la ville est retrouvée une fois pour toutes grâce au service de géocodage de l'IGN (Base

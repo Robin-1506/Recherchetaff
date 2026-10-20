@@ -24,9 +24,14 @@ const Carte = (() => {
   }
 
   function bulle(o) {
+    const e = o.etablissement;
     return el("div", { class: "bulle" },
       el("strong", {}, o.titre),
       el("div", { class: "discret" }, [o.entreprise || "Entreprise non précisée", o.lieu].filter(Boolean).join(" · ")),
+      e ? el("div", {}, `📍 ${e.adresse}`, e.nb_proches > 1
+        ? el("div", { class: "discret" }, `${e.nb_proches} établissements proches : le plus proche de la ville de l'offre est affiché.`)
+        : null)
+        : el("div", { class: "discret" }, "Position approximative (centre de la ville)."),
       el("div", { class: "badges" }, badges(o).slice(0, 3)),
       el("button", { type: "button", class: "bouton-principal", onclick: () => ouvrirFiche(o) }, "Voir la fiche"),
     );
@@ -37,10 +42,15 @@ const Carte = (() => {
     // La carte vient d'apparaître : Leaflet doit recalculer sa taille.
     setTimeout(() => carte.invalidateSize(), 0);
     groupe.clearLayers();
-    const situees = offres.filter((o) => Array.isArray(o.coordonnees));
+    const position = (o) => (o.etablissement && o.etablissement.coordonnees) || o.coordonnees;
+    const situees = offres.filter((o) => Array.isArray(position(o)));
     for (const o of situees) {
       const couleur = COULEURS[classeScore(o.score ?? 0)];
-      L.circleMarker(o.coordonnees, { radius: 8, color: "#ffffff", weight: 2, fillColor: couleur, fillOpacity: 0.95 })
+      // Point plein : adresse de l'entreprise ; point en pointillé : centre de la ville.
+      const style = o.etablissement
+        ? { radius: 8, color: "#ffffff", weight: 2, fillColor: couleur, fillOpacity: 0.95 }
+        : { radius: 8, color: couleur, weight: 2, dashArray: "3 3", fillColor: couleur, fillOpacity: 0.3 };
+      L.circleMarker(position(o), style)
         .bindPopup(() => bulle(o), { maxWidth: 280 })
         .addTo(groupe);
     }

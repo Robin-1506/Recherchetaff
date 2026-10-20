@@ -81,6 +81,7 @@ def lancer(config: dict, donnees: dict, maintenant: datetime, clients: dict | No
     donnees["meta"]["centre"] = (config.get("recherche") or {}).get("centre") or list(geo.NANTES)
     compte_rendu += ["", "### Offres en ligne par poste cible", ""]
     compte_rendu += [f"- {c} : {repartition.get(c, 0)}" for c in categories]
+    compte_rendu += ["", geo.localiser_entreprises(donnees, config, clients.get("entreprises"))]
 
     stockage.alleger(donnees, maintenant)
     actives = sum(1 for o in donnees["offres"] if not o.get("expiree"))

@@ -4,7 +4,7 @@ from collecte import stockage
 from collecte.__main__ import lancer
 from collecte.sources import france_travail as ft
 from tests.test_france_travail import CONFIG, OFFRE, Reponse, client
-from tests.test_geo import FauxGeocodage
+from tests.test_geo import FauxAnnuaire, FauxGeocodage
 
 MAINTENANT = datetime(2026, 10, 18, 5, 0, tzinfo=timezone.utc)
 
@@ -12,7 +12,7 @@ MAINTENANT = datetime(2026, 10, 18, 5, 0, tzinfo=timezone.utc)
 def test_collecte_complete():
     d = stockage.donnees_vides()
     c = client(lambda url, p: Reponse(200, {"resultats": [OFFRE]}))
-    compte_rendu, statut = lancer(CONFIG, d, MAINTENANT, {ft.CLE: c, "geo": FauxGeocodage()})
+    compte_rendu, statut = lancer(CONFIG, d, MAINTENANT, {ft.CLE: c, "geo": FauxGeocodage(), "entreprises": FauxAnnuaire()})
     assert statut["sources"]["france_travail"]["ok"] is True
     assert len(d["offres"]) == 1
     assert any("M1806" in ligne for ligne in compte_rendu)  # rapport des codes ROME
@@ -22,7 +22,7 @@ def test_source_en_panne_signalee_sans_planter(monkeypatch):
     monkeypatch.setattr(ft.time, "sleep", lambda s: None)  # pas d'attente entre les essais
     d = stockage.donnees_vides()
     c = client(lambda url, p: Reponse(503, {}))
-    compte_rendu, statut = lancer(CONFIG, d, MAINTENANT, {ft.CLE: c, "geo": FauxGeocodage()})
+    compte_rendu, statut = lancer(CONFIG, d, MAINTENANT, {ft.CLE: c, "geo": FauxGeocodage(), "entreprises": FauxAnnuaire()})
     assert statut["sources"]["france_travail"]["ok"] is False
     assert "échoué" in statut["sources"]["france_travail"]["message"]
     assert d["offres"] == []
@@ -39,7 +39,7 @@ def test_alertes_email_integrees_par_site():
               "recherche": CONFIG["recherche"]}
     d = stockage.donnees_vides()
     c = client(lambda url, p: Reponse(204))
-    compte_rendu, statut = lancer(config, d, MAINTENANT, {ft.CLE: c, alertes_email.CLE: [message(LINKEDIN)], "geo": FauxGeocodage()})
+    compte_rendu, statut = lancer(config, d, MAINTENANT, {ft.CLE: c, alertes_email.CLE: [message(LINKEDIN)], "geo": FauxGeocodage(), "entreprises": FauxAnnuaire()})
     assert statut["sources"]["alertes_email"]["ok"] is True
     assert {o["sources"][0]["nom"] for o in d["offres"]} == {"LinkedIn (alerte)"}
     assert all("categorie" in o for o in d["offres"])  # notées comme les autres
