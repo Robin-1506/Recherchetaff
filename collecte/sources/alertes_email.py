@@ -26,6 +26,7 @@ from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
 
 from ..modele import detecter_contrat, detecter_teletravail, normaliser_texte, tronquer
+from ..recap import ENTETE_RECAP
 from .commun import ErreurSource, SourceNonConfiguree
 
 NOM = "Alertes e-mail"
@@ -257,6 +258,8 @@ def analyser_message(brut: bytes, sites: list[dict]) -> tuple[list[dict], dict]:
     except (TypeError, ValueError):
         date_iso = None
     expediteur = (message.get("From") or "").rsplit("@", 1)[-1].strip(" >").lower()
+    if message.get(ENTETE_RECAP):  # notre propre récap quotidien
+        return [], {"expediteur": expediteur, "nb": 0, "formes": [], "ignore": True}
     html, texte = _corps(message)
     extraites = extraire_offres_html(html, sites) if html else extraire_offres_texte(texte, sites)
     diagnostic = {"expediteur": expediteur, "nb": len(extraites), "formes": []}
@@ -292,9 +295,12 @@ def lire_boite(adresse: str, mot_de_passe: str, jours: int) -> list[bytes]:
                     messages.append(morceaux[0][1])
             return messages
     except imaplib.IMAP4.error as e:
+        raison = e.args[0] if e.args else ""
+        raison = raison.decode(errors="replace") if isinstance(raison, bytes) else str(raison)
+        raison = re.sub(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", "<adresse>", raison)[:150]
         raise ErreurSource(
-            "Connexion à Gmail refusée. Vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI "
-            "(mot de passe d'application, pas le mot de passe du compte)."
+            f"Connexion à Gmail refusée (réponse de Google : {raison or 'aucune'}). Vérifie GMAIL_ADRESSE et "
+            "GMAIL_MOT_DE_PASSE_APPLI (mot de passe d'application, pas le mot de passe du compte)."
         ) from e
     except OSError as e:
         raise ErreurSource(f"Gmail injoignable : {e.__class__.__name__}") from e
@@ -319,7 +325,7 @@ def collecter(config: dict, messages: list[bytes] | None = None) -> dict:
         except Exception as e:  # un e-mail illisible ne bloque pas les autres
             log.warning("E-mail illisible : %s", e)
             continue
-        if diag["expediteur"] in ignores:
+        if diag.get("ignore") or diag["expediteur"] in ignores:
             continue
         for o in extraites:
             offres.setdefault(o["id"], o)

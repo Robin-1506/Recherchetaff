@@ -22,6 +22,9 @@ SERVEUR_SMTP = "smtp.gmail.com"
 PARIS = ZoneInfo("Europe/Paris")
 COLONNES_A_RELANCER = ("postule", "entretien")
 NOMS_COLONNES = {"postule": "Postulé", "entretien": "Entretien"}
+# En-tête ajouté au récap : la boîte qui l'envoie peut aussi le recevoir, et
+# la lecture des alertes ne doit pas le prendre pour une alerte d'offres.
+ENTETE_RECAP = "X-Veille-Emploi"
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +163,7 @@ def envoyer(message: EmailMessage, expediteur: str, mot_de_passe: str, destinata
     """Envoie par Gmail : port 465 (SSL), puis 587 (STARTTLS) en secours."""
     message["From"] = f"Veille emploi <{expediteur}>"
     message["To"] = destinataire
+    message[ENTETE_RECAP] = "recap"  # pour que la lecture des alertes l'ignore
     mot_de_passe = mot_de_passe.replace(" ", "").strip()  # « abcd efgh ijkl mnop » → « abcdefghijklmnop »
     echecs = []
     for mode in ("SSL 465", "STARTTLS 587"):
@@ -167,14 +171,20 @@ def envoyer(message: EmailMessage, expediteur: str, mot_de_passe: str, destinata
         try:
             with _ouvrir(mode) as smtp:
                 etape = "identification"
-                smtp.login(expediteur, mot_de_passe)
+                # Une seule méthode (PLAIN) : avec login(), un refus est suivi d'un
+                # second essai sur lequel Gmail coupe la connexion, ce qui masque
+                # le motif du refus.
+                smtp.ehlo_or_helo_if_needed()
+                smtp.user, smtp.password = expediteur, mot_de_passe
+                smtp.auth("PLAIN", smtp.auth_plain)
                 etape = "envoi"
                 smtp.send_message(message)
             return
         except smtplib.SMTPAuthenticationError as e:
+            reponse = e.smtp_error.decode(errors="replace") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
             raise ErreurEnvoi(
                 "identification refusée par Gmail : vérifie GMAIL_ADRESSE et GMAIL_MOT_DE_PASSE_APPLI "
-                f"(code {e.smtp_code})"
+                f"(code {e.smtp_code}, réponse de Google : {masquer(' '.join(reponse.split()))[:200]})"
             ) from e
         except (smtplib.SMTPException, OSError) as e:
             detail = masquer(str(e))[:150] or e.__class__.__name__
