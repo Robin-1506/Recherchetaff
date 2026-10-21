@@ -7,6 +7,7 @@ deux appels et le nombre de pages limité.
 
 import logging
 import os
+import time
 
 import requests
 
@@ -20,6 +21,7 @@ PAR_PAGE = 50
 PAGES_MAX = 2
 PAUSE = 2.5  # 25 appels par minute au maximum
 DELAI_EXPIRATION_JOURS = 7  # pas de vérification une à une : délai de grâce
+NOUVEL_ESSAI_APRES = 60  # secondes avant de réessayer les recherches en échec
 
 log = logging.getLogger(__name__)
 
@@ -99,32 +101,41 @@ def collecter(config: dict, client: ClientAdzuna | None = None) -> dict:
     rech = config["recherche"]
     jours = (rech.get("teletravail_france") or {}).get("publiees_depuis_jours", 31)
     offres: dict[str, dict] = {}
-    avertissements: list[str] = []
     reussites = 0
     requetes = requetes_par_mots_cles(config)
-    for mot, national in requetes:
-        params = {"what_phrase": mot, "max_days_old": jours} if national else {
-            "what_phrase": mot, "where": rech.get("ville", "Nantes"), "distance": rech["rayon_km"]}
-        libelle = f"France entière : {mot}" if national else mot
-        try:
-            brutes = client.rechercher(params)
-        except ErreurSource as e:
-            if "refusée (code 401" in str(e) or "refusée (code 403" in str(e):
-                raise
-            avertissements.append(f"Recherche « {libelle} » en échec : {e}")
-            if reussites == 0 and len(avertissements) >= 3:
-                break  # la source semble en panne : inutile d'insister
-            continue
-        reussites += 1
-        for brute in brutes:
-            offre = convertir(brute, hors_zone=national)
-            if national and offre["teletravail"] != "complet":
+    en_echec = []
+    for tour in (1, 2):
+        if tour == 2:
+            if not en_echec or reussites == 0:
+                break
+            # Panne passagère (code 503…) : nouvel essai des recherches en échec, plus tard.
+            log.info("Adzuna : nouvel essai de %d recherches dans %ss", len(en_echec), NOUVEL_ESSAI_APRES)
+            time.sleep(NOUVEL_ESSAI_APRES)
+        a_faire, en_echec = (requetes if tour == 1 else [r for r, _ in en_echec]), []
+        for mot, national in a_faire:
+            params = {"what_phrase": mot, "max_days_old": jours} if national else {
+                "what_phrase": mot, "where": rech.get("ville", "Nantes"), "distance": rech["rayon_km"]}
+            libelle = f"France entière : {mot}" if national else mot
+            try:
+                brutes = client.rechercher(params)
+            except ErreurSource as e:
+                if "refusée (code 401" in str(e) or "refusée (code 403" in str(e):
+                    raise
+                en_echec.append(((mot, national), f"Recherche « {libelle} » en échec : {e}"))
+                if reussites == 0 and len(en_echec) >= 3:
+                    break  # la source semble en panne : inutile d'insister
                 continue
-            if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
-                continue
-            offres[offre["id"]] = offre
-        log.info("Adzuna « %s » : %d offres reçues", libelle, len(brutes))
+            reussites += 1
+            for brute in brutes:
+                offre = convertir(brute, hors_zone=national)
+                if national and offre["teletravail"] != "complet":
+                    continue
+                if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
+                    continue
+                offres[offre["id"]] = offre
+            log.info("Adzuna « %s » : %d offres reçues", libelle, len(brutes))
 
+    avertissements = [message for _, message in en_echec]
     if requetes and reussites == 0:
         raise ErreurSource("Toutes les recherches Adzuna ont échoué. " + avertissements[0])
     return {"offres": list(offres.values()), "avertissements": avertissements, "complet": not avertissements,

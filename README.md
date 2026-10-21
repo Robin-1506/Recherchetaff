@@ -25,7 +25,9 @@ sur un site web protégé par un mot de passe.
    et tu vois les offres.
 
 Si une source est en panne, les autres continuent. Le site affiche alors un bandeau
-qui indique quelle source n'a pas pu être consultée.
+qui indique quelle source n'a pas pu être consultée. Pour Adzuna et Jooble, une recherche
+en échec (panne passagère, code 503…) est réessayée une fois à la fin, une minute plus tard.
+Les offres déjà connues ne sont jamais retirées après une collecte partielle.
 
 ### Lancer une collecte à la main
 

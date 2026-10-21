@@ -7,6 +7,7 @@ avec un corps JSON ; on essaie l'hôte français puis l'hôte international.
 import hashlib
 import logging
 import os
+import time
 
 import requests
 
@@ -19,6 +20,7 @@ HOTES = ("fr.jooble.org", "jooble.org")
 PAGES_MAX = 3
 PAUSE = 0.5
 DELAI_EXPIRATION_JOURS = 7
+NOUVEL_ESSAI_APRES = 60  # secondes avant de réessayer les recherches en échec
 
 log = logging.getLogger(__name__)
 
@@ -91,32 +93,41 @@ def collecter(config: dict, client: ClientJooble | None = None) -> dict:
 
     rech = config["recherche"]
     offres: dict[str, dict] = {}
-    avertissements: list[str] = []
     reussites = 0
     requetes = requetes_par_mots_cles(config)
-    for mot, national in requetes:
-        corps = {"keywords": mot, "location": "France"} if national else {
-            "keywords": mot, "location": rech.get("ville", "Nantes"), "radius": str(rech["rayon_km"])}
-        libelle = f"France entière : {mot}" if national else mot
-        try:
-            brutes = client.rechercher(corps)
-        except ErreurSource as e:
-            if "Clé Jooble refusée" in str(e):
-                raise
-            avertissements.append(f"Recherche « {libelle} » en échec : {e}")
-            if reussites == 0 and len(avertissements) >= 3:
-                break  # la source semble en panne : inutile d'insister
-            continue
-        reussites += 1
-        for brute in brutes:
-            offre = convertir(brute, hors_zone=national)
-            if national and offre["teletravail"] != "complet":
+    en_echec = []
+    for tour in (1, 2):
+        if tour == 2:
+            if not en_echec or reussites == 0:
+                break
+            # Panne passagère (code 503…) : nouvel essai des recherches en échec, plus tard.
+            log.info("Jooble : nouvel essai de %d recherches dans %ss", len(en_echec), NOUVEL_ESSAI_APRES)
+            time.sleep(NOUVEL_ESSAI_APRES)
+        a_faire, en_echec = (requetes if tour == 1 else [r for r, _ in en_echec]), []
+        for mot, national in a_faire:
+            corps = {"keywords": mot, "location": "France"} if national else {
+                "keywords": mot, "location": rech.get("ville", "Nantes"), "radius": str(rech["rayon_km"])}
+            libelle = f"France entière : {mot}" if national else mot
+            try:
+                brutes = client.rechercher(corps)
+            except ErreurSource as e:
+                if "Clé Jooble refusée" in str(e):
+                    raise
+                en_echec.append(((mot, national), f"Recherche « {libelle} » en échec : {e}"))
+                if reussites == 0 and len(en_echec) >= 3:
+                    break  # la source semble en panne : inutile d'insister
                 continue
-            if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
-                continue
-            offres[offre["id"]] = offre
-        log.info("Jooble « %s » : %d offres reçues", libelle, len(brutes))
+            reussites += 1
+            for brute in brutes:
+                offre = convertir(brute, hors_zone=national)
+                if national and offre["teletravail"] != "complet":
+                    continue
+                if offre["id"] in offres and not offres[offre["id"]]["hors_zone"]:
+                    continue
+                offres[offre["id"]] = offre
+            log.info("Jooble « %s » : %d offres reçues", libelle, len(brutes))
 
+    avertissements = [message for _, message in en_echec]
     if requetes and reussites == 0:
         raise ErreurSource("Toutes les recherches Jooble ont échoué. " + avertissements[0])
     return {"offres": list(offres.values()), "avertissements": avertissements, "complet": not avertissements,
