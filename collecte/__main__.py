@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import apprentissage, competences, geo, recap, score, stockage
+from . import airtable, apprentissage, competences, geo, recap, score, stockage
 from .chiffrement import dechiffrer
 from .sources import adzuna, alertes_email, france_travail, jooble
 from .sources.commun import SourceNonConfiguree
@@ -25,6 +25,8 @@ CHEMIN_DONNEES = RACINE / "docs" / "data" / "offres.chiffre.json"
 CHEMIN_STATUT = RACINE / "docs" / "data" / "statut.json"
 # Suivi des candidatures, écrit par le site (chiffré).
 CHEMIN_SUIVI = RACINE / "docs" / "data" / "suivi.chiffre.json"
+# Copie des candidatures gérées dans Airtable (chiffrée), écrite par collecte/airtable.py.
+CHEMIN_REPLIQUE = airtable.CHEMIN_REPLIQUE
 
 # Ordre de passage : la première source qui trouve une offre en garde la
 # fiche principale, les suivantes y ajoutent leur lien.
@@ -100,15 +102,24 @@ def url_site(config: dict) -> str:
     return f"https://{proprietaire.lower()}.github.io/{depot}/" if depot else ""
 
 
-def charger_suivi(mot_de_passe: str) -> dict | None:
-    """Suivi des candidatures et choix ★ / Ignorer, écrits (chiffrés) par le site."""
-    if not CHEMIN_SUIVI.exists():
+def _lire_chiffre(chemin: Path, mot_de_passe: str) -> dict | None:
+    if not chemin.exists():
         return None
     try:
-        return dechiffrer(json.loads(CHEMIN_SUIVI.read_text(encoding="utf-8")), mot_de_passe)
+        return dechiffrer(json.loads(chemin.read_text(encoding="utf-8")), mot_de_passe)
     except Exception:
-        log.warning("Suivi des candidatures illisible : ni relances ni apprentissage du score.")
+        log.warning("Fichier %s illisible : ni relances ni apprentissage du score.", chemin.name)
         return None
+
+
+def charger_suivi(mot_de_passe: str) -> dict | None:
+    """Choix ★ / Ignorer (écrits par le site) et candidatures. Une fois Airtable
+    branché, les candidatures sont celles d'Airtable (copie dans la réplique)."""
+    suivi = _lire_chiffre(CHEMIN_SUIVI, mot_de_passe)
+    replique = _lire_chiffre(CHEMIN_REPLIQUE, mot_de_passe)
+    if replique and replique.get("table"):
+        suivi = {**(suivi or {}), "candidatures": airtable.candidatures_suivi(replique)}
+    return suivi
 
 
 def gerer_recap(config: dict, donnees: dict, maintenant: datetime, mot_de_passe: str) -> dict:

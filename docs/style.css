@@ -227,21 +227,20 @@ input[type="password"], input[type="search"], select {
 .bouton-discret.actif { color: var(--moyen); border-color: var(--moyen); }
 .bouton-discret.danger { color: var(--alerte); }
 .bouton-discret:disabled { opacity: .35; cursor: default; }
-.importer { display: inline-flex; align-items: center; }
 
 /* Suivi des candidatures */
 .suivi-barre { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
-.kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; margin-top: 10px; }
-.colonne { background: var(--badge-fond); border-radius: var(--rayon); padding: 10px; }
-.colonne h3 { margin: 0 0 8px; font-size: .95rem; }
-.colonne .vide { margin: 4px 0; }
-.candidature { padding: 10px 12px; }
-.candidature.a-relancer { border-color: var(--alerte); }
-.candidature-ouvrir { all: unset; display: block; width: 100%; cursor: pointer; }
-.candidature-ouvrir:focus-visible { outline: 2px solid var(--accent); }
-.candidature-fleches { display: flex; justify-content: space-between; margin-top: 8px; }
-.candidature-fleches .bouton-discret { padding: 2px 12px; }
-.relance-due { color: var(--alerte) !important; font-weight: 600; }
+.groupe-suivi { margin: 12px 0; }
+.groupe-suivi summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.liste-suivi { list-style: none; margin: 0; padding: 0; border: 1px solid var(--bordure); border-radius: var(--rayon);
+  background: var(--carte); }
+.ligne-suivi { display: grid; gap: 2px; padding: 10px 14px; border-top: 1px solid var(--bordure); }
+.ligne-suivi:first-child { border-top: 0; }
+.ligne-suivi a { color: inherit; text-decoration: none; }
+.ligne-suivi a:hover .offre-titre { text-decoration: underline; }
+.ligne-suivi.a-relancer { box-shadow: inset 3px 0 0 var(--alerte); }
+#fiche-message:empty { display: none; }
+a.bouton-principal { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* Formulaires */
 .formulaire { display: grid; gap: 10px; }
@@ -255,7 +254,6 @@ input[type="password"], input[type="search"], select {
   font: inherit;
   font-weight: normal;
 }
-.deux-colonnes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* Carte */
 .carte-offres {
@@ -269,10 +267,6 @@ input[type="password"], input[type="search"], select {
 .bulle .badges { margin: 0; }
 .bulle .bouton-principal { padding: 6px 10px; justify-self: start; }
 a.bouton-discret { text-decoration: none; display: inline-flex; align-items: center; }
-
-@media (max-width: 900px) {
-  .kanban { grid-template-columns: 1fr; }
-}
 
 @media (max-width: 600px) {
   #app { padding: 12px 16px; }
@@ -290,5 +284,4 @@ a.bouton-discret { text-decoration: none; display: inline-flex; align-items: cen
   #liste > li { display: flex; }
   #liste .offre { height: 100%; }
   .carte-offres { height: min(78vh, 820px); }
-  .kanban { gap: 14px; }
 }

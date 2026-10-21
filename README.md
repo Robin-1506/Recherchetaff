@@ -98,30 +98,51 @@ dans `docs/vendor/`, licences incluses).
 
 ---
 
-## Suivi des candidatures
+## Suivi des candidatures (Airtable)
 
-- Dans la fiche d'une offre : **☆ Intéressante** (étoile), **Ignorer** (l'offre disparaît de la
-  liste ; « Afficher les ignorées » dans « Plus de filtres » pour la retrouver) et **Ajouter au suivi**.
-- L'onglet **Suivi** présente tes candidatures en colonnes : À postuler → Postulé → Entretien →
-  Offre / Refus. Les flèches ← → font changer d'étape ; un clic sur une carte ouvre sa fiche
-  (date, contact, notes, relance). « + Nouvelle candidature » sert pour une offre trouvée ailleurs.
-- En passant à « Postulé », la date de candidature est remplie et une **relance est proposée
-  à J+7** (modifiable). Le bouton « Relancé aujourd'hui » note la relance et en propose une
-  nouvelle 7 jours plus tard. Les candidatures à relancer sont signalées par ⏰.
+Tes candidatures se gèrent dans **Airtable**, une table en ligne avec une vue en colonnes
+(kanban) : étapes, dates, contact, notes. Le site n'en montre qu'un **aperçu en lecture seule**.
+
+- Dans la fiche d'une offre : **☆ Intéressante**, **Ignorer** (l'offre disparaît de la liste ;
+  « Afficher les ignorées » dans « Plus de filtres » pour la retrouver) et **Ajouter au suivi**.
+- **Ajouter au suivi** : la fiche est créée dans Airtable **une à deux minutes plus tard**
+  (étape « À postuler », avec le poste, l'entreprise, le lieu, le score et le lien de l'offre).
+  Ensuite, le bouton devient **Ouvrir dans Airtable**.
+- L'onglet **Suivi** regroupe tes candidatures par étape, avec les relances à faire (⏰).
+  Un clic sur une candidature l'ouvre dans Airtable. Une candidature trouvée ailleurs
+  s'ajoute directement dans Airtable.
+- Quand tu passes une fiche à **« Postulé »** dans Airtable sans date, la synchro remplit la
+  date de candidature (aujourd'hui) et propose une **relance à J+7** (modifiable).
+- Tu peux ajouter tes propres étapes dans Airtable (ex. « Relancé ») : le site les affiche.
+
+### Comment se fait la synchronisation ?
+
+Par une tâche GitHub, **Synchro Airtable** (`.github/workflows/airtable.yml`,
+programme `collecte/airtable.py`). La clé Airtable reste dans les secrets GitHub, jamais sur
+tes appareils.
+- **Site → Airtable** : après chaque « Ajouter au suivi » (une minute environ).
+- **Airtable → site** : vers 6 h 20 (avant la collecte et le récap), 12 h, 17 h et 21 h. Les
+  changements faits dans Airtable apparaissent donc sur le site dans les heures qui suivent.
+  Pour aller plus vite : onglet **Actions**, **Synchro Airtable**, **Run workflow**.
+- Offre gratuite d'Airtable : **1 000 appels par mois**. Une synchro en utilise 1 ou 2, et
+  aucun quand il n'y a rien à envoyer : on reste autour de 200 par mois.
+- Si tu supprimes une fiche dans Airtable, elle n'est pas recréée, sauf si tu cliques de
+  nouveau sur « Ajouter au suivi ».
+- La table « Candidatures » et ses champs sont créés au premier lancement. Ne renomme pas
+  les champs (le programme les retrouve par leur nom) ; tu peux en ajouter d'autres.
 
 ### Où sont stockées ces informations ?
 
-Dans `docs/data/suivi.chiffre.json`, **chiffré avec le mot de passe du site** : le fichier est
-public mais illisible sans le mot de passe. Le site l'enregistre directement dans le dépôt
-grâce à un **jeton GitHub** saisi une fois par appareil (bouton « Synchro »). Ainsi :
-- téléphone et ordinateur partagent le même suivi (mis à jour à l'ouverture de la page) ;
-- le récap du matin pourra te rappeler les relances du jour ;
-- sans jeton, un appareil peut consulter le suivi mais ses modifications restent sur lui.
+- **Airtable** : toutes tes candidatures, dont tes **notes** (elles n'en sortent pas).
+- `docs/data/airtable.chiffre.json` : la copie lue par le site, le récap (relances) et le
+  score (tes candidatures comptent comme des offres aimées). Sans les notes, et **chiffrée
+  avec le mot de passe du site**.
+- `docs/data/suivi.chiffre.json` : tes choix ☆ / Ignorer et tes ajouts au suivi, **chiffrés**.
+  Le site l'enregistre grâce à un **jeton GitHub** saisi une fois par appareil (bouton
+  « Synchro »). Sans jeton, un appareil peut consulter le suivi, mais ses choix restent sur
+  lui et ses ajouts ne partent pas vers Airtable.
 
-Une copie reste aussi dans chaque navigateur, et le bouton **Exporter** télécharge une
-sauvegarde (à réimporter avec **Importer** si besoin).
-
-**Le jeton** ne permet que de modifier ce dépôt. S'il expire ou si un appareil est perdu :
+**Le jeton GitHub** ne permet que de modifier ce dépôt. S'il expire ou si un appareil est perdu :
 supprime-le sur GitHub (Settings → Developer settings → Personal access tokens) et crée-en un nouveau.
 
 ---
@@ -213,6 +234,8 @@ Pour changer une valeur : clique sur le crayon à côté du secret existant.
 | `GMAIL_ADRESSE` | Adresse de la boîte Gmail dédiée aux alertes | 4 |
 | `GMAIL_MOT_DE_PASSE_APPLI` | Mot de passe d'application de cette boîte (16 lettres) | 4 |
 | `RECAP_DESTINATAIRE` | Adresse qui reçoit le récap quotidien | 6 |
+| `AIRTABLE_TOKEN` | Jeton personnel Airtable (accès à la seule base des candidatures) | suivi |
+| `AIRTABLE_BASE` | Identifiant de la base Airtable (commence par `app`) | suivi |
 
 Si un secret manque, la source correspondante est simplement indiquée « pas encore
 configurée » sur le site, et les autres continuent de fonctionner.
@@ -230,10 +253,11 @@ peut voir** :
 - le fichier de réglages `config/criteres.yaml` (donc tes postes cibles et tes mots-clés) ;
 - `docs/data/statut.json` : la date de la dernière collecte, et pour chaque source si elle a
   fonctionné et combien d'offres elle a trouvées ;
-- le fichier des offres, **mais chiffré** : sans le mot de passe, il est illisible.
+- les fichiers des offres, du suivi et de la copie d'Airtable, **mais chiffrés** : sans le
+  mot de passe, ils sont illisibles.
 
 **Ne sont jamais publiés** : tes clés d'API, ton mot de passe, ton CV (étape 7, rangé
-dans les secrets) et tes notes de candidature.
+dans les secrets) et tes notes de candidature (elles restent dans Airtable, qui est privé).
 
 ---
 

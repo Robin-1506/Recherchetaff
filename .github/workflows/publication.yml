@@ -5,9 +5,9 @@ name: Publication du site
 on:
   push:
     branches: [main]
-    # Le fichier du suivi est lu directement via l'API GitHub : inutile de
-    # republier le site à chaque modification d'une candidature.
-    paths: ["docs/**", "!docs/data/suivi.chiffre.json"]
+    # Le suivi et la copie d'Airtable sont lus directement via l'API GitHub :
+    # inutile de republier le site à chaque modification.
+    paths: ["docs/**", "!docs/data/suivi.chiffre.json", "!docs/data/airtable.chiffre.json"]
   workflow_call:
   workflow_dispatch:
 

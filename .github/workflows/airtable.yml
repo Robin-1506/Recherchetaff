@@ -1,0 +1,65 @@
+# Synchronisation avec Airtable, où tu gères tes candidatures.
+# - après chaque modification du suivi par le site (« Ajouter au suivi ») ;
+# - plusieurs fois par jour, pour recopier dans le site ce que tu as changé
+#   dans Airtable (dont une fois avant la collecte du matin, pour le récap) ;
+# - à la main : onglet « Actions », « Synchro Airtable », « Run workflow ».
+name: Synchro Airtable
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/data/suivi.chiffre.json"]
+  schedule:
+    # Heures UTC : 6 h 20 ou 7 h 20 à Paris (avant la collecte), puis vers 12 h, 17 h et 21 h.
+    - cron: "20 4,5,10,15,19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: airtable
+
+jobs:
+  synchro:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Synchroniser avec Airtable
+        env:
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE: ${{ secrets.AIRTABLE_BASE }}
+          MOT_DE_PASSE_SITE: ${{ secrets.MOT_DE_PASSE_SITE }}
+          # Après une modification du site : on n'appelle Airtable que s'il y a une fiche à créer.
+          SYNCHRO_COMPLETE: ${{ github.event_name == 'push' && 'non' || 'oui' }}
+        run: python -m collecte.airtable
+
+      - name: Enregistrer la copie d'Airtable dans le dépôt
+        # Même en cas d'échec : l'erreur est notée dans la copie, et affichée par le site.
+        if: success() || failure()
+        run: |
+          git config user.name "veille-emploi[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/airtable.chiffre.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Rien à enregistrer."
+          else
+            git commit -m "Synchro Airtable"
+            for essai in 1 2 3; do
+              if git pull --rebase origin main && git push origin HEAD:main; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Impossible d'enregistrer la copie après 3 essais." >&2
+            exit 1
+          fi

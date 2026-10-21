@@ -93,16 +93,14 @@
     </div>
     </section>
 
-    <!-- Suivi des candidatures -->
+    <!-- Suivi des candidatures : aperçu de la table Airtable -->
     <section id="vue-suivi" hidden>
       <div class="suivi-barre">
-        <button id="nouvelle-candidature" class="bouton-principal" type="button">+ Nouvelle candidature</button>
-        <button id="exporter-suivi" class="bouton-discret" type="button">Exporter</button>
-        <label class="bouton-discret importer">Importer<input id="importer-suivi" type="file" accept="application/json" hidden></label>
+        <a id="ouvrir-airtable" class="bouton-principal" target="_blank" rel="noopener noreferrer" hidden>Ouvrir Airtable</a>
       </div>
       <p id="etat-synchro" class="discret" aria-live="polite"></p>
       <div id="a-relancer"></div>
-      <div id="kanban" class="kanban"></div>
+      <div id="liste-suivi"></div>
     </section>
   </div>
 
@@ -119,6 +117,7 @@
         <button id="b-suivre" type="button" class="bouton-principal">Ajouter au suivi</button>
         <a id="b-maps" class="bouton-discret" target="_blank" rel="noopener noreferrer">📍 Google Maps</a>
       </div>
+      <p id="fiche-message" class="discret" aria-live="polite"></p>
       <dl id="fiche-infos" class="infos"></dl>
       <section id="fiche-competences" class="competences" aria-labelledby="titre-competences" hidden>
         <h3 id="titre-competences">Compétences demandées</h3>
@@ -134,36 +133,14 @@
     </div>
   </dialog>
 
-  <!-- Fiche de candidature -->
-  <dialog id="candidature" class="fiche" aria-labelledby="candidature-titre">
-    <form id="form-candidature" class="fiche-contenu formulaire" method="dialog">
-      <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
-      <h2 id="candidature-titre">Candidature</h2>
-      <label>Poste <input name="titre" required></label>
-      <label>Entreprise <input name="entreprise"></label>
-      <label>Lien de l'offre <input name="lien" type="url" placeholder="https://…"></label>
-      <label>Étape <select name="colonne"></select></label>
-      <div class="deux-colonnes">
-        <label>Date de candidature <input name="date_candidature" type="date"></label>
-        <label>Relance prévue <input name="relance" type="date"></label>
-      </div>
-      <label>Contact <input name="contact" placeholder="Nom, e-mail, téléphone…"></label>
-      <label>Notes <textarea name="notes" rows="5"></textarea></label>
-      <div class="fiche-actions">
-        <button type="submit" class="bouton-principal">Enregistrer</button>
-        <button id="b-relance-faite" type="button" class="bouton-discret">Relancé aujourd'hui</button>
-        <button id="b-supprimer-candidature" type="button" class="bouton-discret danger">Supprimer</button>
-      </div>
-    </form>
-  </dialog>
-
   <!-- Réglages de synchronisation -->
   <dialog id="reglages-synchro" class="fiche" aria-labelledby="synchro-titre">
     <form id="form-synchro" class="fiche-contenu formulaire" method="dialog">
       <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
       <h2 id="synchro-titre">Synchronisation du suivi</h2>
-      <p class="discret">Ton suivi est enregistré, chiffré avec ton mot de passe, dans le dépôt GitHub.
-        Pour que cet appareil puisse l'y enregistrer, colle ici ton jeton GitHub. Il reste sur cet appareil.</p>
+      <p class="discret">Tes choix (☆, Ignorer) et tes ajouts au suivi sont enregistrés, chiffrés avec ton mot
+        de passe, dans le dépôt GitHub, qui envoie ensuite les ajouts à Airtable. Pour que cet appareil puisse
+        les y enregistrer, colle ici ton jeton GitHub. Il reste sur cet appareil.</p>
       <label>Jeton GitHub <input id="jeton" type="password" autocomplete="off" placeholder="github_pat_…"></label>
       <p id="synchro-message" class="discret" aria-live="polite"></p>
       <div class="fiche-actions">

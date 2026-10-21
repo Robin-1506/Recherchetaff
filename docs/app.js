@@ -229,7 +229,7 @@ function badges(o) {
   return [
     statut === "interessant" && el("span", { class: "badge etoile" }, "★ Intéressante"),
     statut === "ignore" && el("span", { class: "badge" }, "Ignorée"),
-    candidature && el("span", { class: "badge suivi" }, `Suivi : ${Suivi.nomColonne(candidature.colonne)}`),
+    candidature && el("span", { class: "badge suivi" }, `Suivi : ${candidature.etape}`),
     typeof o.score === "number" && el("span", { class: `badge score ${classeScore(o.score)}`, title: "Score de pertinence" }, `${o.score}/100`),
     o.categorie && el("span", { class: "badge" + (o.categorie === HORS_CIBLE ? " attention" : " categorie") }, o.categorie),
     estNouvelle(o) && !o.expiree && el("span", { class: "badge nouveau" }, "Nouvelle"),
@@ -386,6 +386,7 @@ function ouvrirFiche(o) {
   $("b-maps").hidden = !maps;
   if (maps) $("b-maps").href = maps;
   etat.offreOuverte = o;
+  $("fiche-message").textContent = "";
   actualiserActionsFiche();
   $("fiche").showModal();
   $("fiche").scrollTop = 0;
@@ -399,7 +400,9 @@ function actualiserActionsFiche() {
   $("b-interessant").textContent = statut === "interessant" ? "★ Intéressante" : "☆ Intéressante";
   $("b-interessant").classList.toggle("actif", statut === "interessant");
   $("b-ignorer").textContent = statut === "ignore" ? "Ne plus ignorer" : "Ignorer";
-  $("b-suivre").textContent = candidature ? `Voir dans le suivi (${Suivi.nomColonne(candidature.colonne)})` : "Ajouter au suivi";
+  $("b-suivre").textContent = !candidature ? "Ajouter au suivi"
+    : candidature.url ? `Ouvrir dans Airtable (${candidature.etape})` : candidature.etape;
+  $("b-suivre").disabled = Boolean(candidature && !candidature.url);
   $("fiche-badges").replaceChildren(...badges(o));
 }
 
@@ -455,10 +458,16 @@ function brancher() {
   });
   $("b-suivre").addEventListener("click", () => {
     const o = etat.offreOuverte;
-    const candidature = Suivi.candidaturePourOffre(o.id) || Suivi.creerDepuisOffre(o);
-    $("fiche").close();
-    afficherVue("suivi");
-    Suivi.ouvrirCandidature(candidature.id);
+    const candidature = Suivi.candidaturePourOffre(o.id);
+    if (candidature?.url) {
+      window.open(candidature.url, "_blank", "noopener");
+      return;
+    }
+    Suivi.creerDepuisOffre(o);
+    $("fiche-message").textContent = Suivi.aJeton()
+      ? "Ajoutée : la fiche sera créée dans Airtable d'ici une à deux minutes."
+      : "Ajoutée sur cet appareil seulement : ajoute ton jeton GitHub (bouton « Synchro ») pour l'envoyer à Airtable.";
+    afficherListe();
   });
 
   for (const onglet of document.querySelectorAll(".onglet")) {
