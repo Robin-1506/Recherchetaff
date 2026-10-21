@@ -230,15 +230,153 @@ input[type="password"], input[type="search"], select {
 
 /* Suivi des candidatures */
 .suivi-barre { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
-.groupe-suivi { margin: 12px 0; }
-.groupe-suivi summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
-.liste-suivi { list-style: none; margin: 0; padding: 0; border: 1px solid var(--bordure); border-radius: var(--rayon);
-  background: var(--carte); }
-.ligne-suivi { display: grid; gap: 2px; padding: 10px 14px; border-top: 1px solid var(--bordure); }
-.ligne-suivi:first-child { border-top: 0; }
-.ligne-suivi a { color: inherit; text-decoration: none; }
-.ligne-suivi a:hover .offre-titre { text-decoration: underline; }
-.ligne-suivi.a-relancer { box-shadow: inset 3px 0 0 var(--alerte); }
+/* Kanban (onglet Suivi) */
+:root {
+  --e-gris: #5b6472;   --e-gris-fond: #eceef2;
+  --e-bleu: #1f5fd1;   --e-bleu-fond: #e3ecfd;
+  --e-violet: #7140c9; --e-violet-fond: #efe7fc;
+  --e-vert: #13794b;   --e-vert-fond: #dff4e9;
+  --e-rouge: #b4362a;  --e-rouge-fond: #fbe7e4;
+  --e-jaune: #8a6100;  --e-jaune-fond: #fbf0d3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --e-gris: #b3bac6;   --e-gris-fond: #2a303b;
+    --e-bleu: #8fb2ff;   --e-bleu-fond: #1d2b4a;
+    --e-violet: #c3a6ff; --e-violet-fond: #2e2347;
+    --e-vert: #6fd6a6;   --e-vert-fond: #173528;
+    --e-rouge: #ff9d8f;  --e-rouge-fond: #3d211d;
+    --e-jaune: #f0c96a;  --e-jaune-fond: #3a2f14;
+  }
+}
+.c-gris { --e: var(--e-gris); --e-fond: var(--e-gris-fond); }
+.c-bleu { --e: var(--e-bleu); --e-fond: var(--e-bleu-fond); }
+.c-violet { --e: var(--e-violet); --e-fond: var(--e-violet-fond); }
+.c-vert { --e: var(--e-vert); --e-fond: var(--e-vert-fond); }
+.c-rouge { --e: var(--e-rouge); --e-fond: var(--e-rouge-fond); }
+.c-jaune { --e: var(--e-jaune); --e-fond: var(--e-jaune-fond); }
+
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(188px, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 12px 0 8px;
+  padding-bottom: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+.kb-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 140px;
+  padding: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--e-fond) 55%, var(--fond));
+  border: 1px solid transparent;
+  scroll-snap-align: start;
+  transition: border-color .15s, background .15s;
+}
+.kb-colonne.kb-survol { border-color: var(--e); background: var(--e-fond); }
+.kb-entete { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 2px 4px; }
+.kb-etape {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--e-fond);
+  color: var(--e);
+  font-size: .85rem; font-weight: 600;
+  white-space: nowrap;
+}
+.kb-etape::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.kb-nb { color: var(--discret); font-size: .85rem; font-weight: 600; }
+.kb-cartes { display: grid; gap: 8px; }
+.kb-vide { margin: 6px 2px; color: var(--discret); font-size: .85rem; text-align: center; opacity: .8; }
+.kb-carte {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  background: var(--carte);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .06);
+  cursor: pointer;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+}
+.kb-carte:hover { box-shadow: 0 4px 14px rgb(15 23 42 / .12); transform: translateY(-1px); }
+.kb-carte:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kb-carte[draggable="true"] { cursor: grab; }
+.kb-carte.kb-glissee { opacity: .45; transform: rotate(1.5deg); }
+.kb-carte.kb-relance { border-left: 3px solid var(--alerte); }
+.kb-carte.kb-en-route { border-style: dashed; opacity: .8; cursor: pointer; }
+.kb-titre { font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.kb-entreprise { display: flex; align-items: center; gap: 7px; color: var(--discret); font-size: .88rem; min-width: 0; }
+.kb-avatar {
+  display: inline-grid; place-items: center; flex: none;
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  background: var(--badge-fond);
+  color: var(--texte);
+  font-size: .72rem; font-weight: 700;
+}
+.kb-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.kb-chip {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--badge-fond);
+  color: var(--discret);
+  font-size: .78rem;
+  white-space: nowrap;
+}
+.kb-chip-alerte { background: var(--alerte-fond); color: var(--alerte); font-weight: 600; }
+.kb-score.fort { background: var(--nouveau-fond); color: var(--nouveau); font-weight: 600; }
+.kb-score.moyen { background: var(--moyen-fond); color: var(--moyen); font-weight: 600; }
+
+/* Fiche d'une carte : panneau latéral sur grand écran */
+.panneau { width: min(560px, 100vw); }
+@media (min-width: 900px) {
+  .panneau { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0 0 0 1px; }
+}
+.kb-proprietes { display: grid; grid-template-columns: 120px 1fr; gap: 10px 12px; margin: 16px 0; font-size: .93rem; align-items: center; }
+.kb-proprietes dt { color: var(--discret); }
+.kb-proprietes dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.kb-etape-choix {
+  width: auto;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--e-fond);
+  color: var(--e);
+  font: inherit; font-weight: 600; font-size: .88rem;
+  cursor: pointer;
+}
+.kb-notes { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.kb-notes li { padding: 8px 10px; border-radius: 8px; background: var(--badge-fond); font-size: .92rem; white-space: pre-wrap; }
+.kb-notes li.discret { background: none; padding: 0; }
+.kb-note-attente { opacity: .75; font-style: italic; }
+.kb-commentaire { display: grid; gap: 8px; }
+.kb-commentaire textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  background: var(--carte);
+  color: var(--texte);
+  font: inherit;
+  resize: vertical;
+}
+.kb-commentaire .bouton-principal { justify-self: start; }
+
+@media (max-width: 600px) {
+  .kanban { grid-auto-columns: 84vw; margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px;
+    scroll-padding-left: 16px; scroll-snap-type: x mandatory; }
+  .kb-proprietes { grid-template-columns: 100px 1fr; }
+}
+
 #fiche-message:empty { display: none; }
 a.bouton-principal { text-decoration: none; display: inline-flex; align-items: center; }
 

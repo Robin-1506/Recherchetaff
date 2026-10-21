@@ -7,12 +7,14 @@
 // avec le mot de passe du site, via l'API GitHub et un jeton saisi une fois
 // par appareil) :
 //  - tes choix ☆ / Ignorer ;
-//  - les offres que tu ajoutes au suivi. La synchro Airtable (GitHub Actions,
-//    collecte/airtable.py) en crée la fiche dans Airtable une minute plus tard.
+//  - les offres que tu ajoutes au suivi ;
+//  - tes demandes faites dans le kanban : changement d'étape (glisser une carte)
+//    et commentaires. La synchro Airtable (GitHub Actions, collecte/airtable.py)
+//    les applique dans Airtable une à deux minutes plus tard.
 //
-// Ce que le site lit seulement : docs/data/airtable.chiffre.json, la copie de
-// tes candidatures dans Airtable. La gestion (étapes, dates, notes) se fait
-// dans Airtable ; la vue Suivi n'en est qu'un aperçu.
+// Ce que le site lit : docs/data/airtable.chiffre.json, la copie de tes
+// candidatures dans Airtable (notes comprises). En attendant qu'elles arrivent
+// dans Airtable, tes demandes sont affichées par-dessus cette copie.
 //
 // Fusion des choix entre appareils : chaque élément porte sa date de
 // modification (« maj ») ; la plus récente l'emporte, élément par élément.
@@ -27,6 +29,8 @@ const Suivi = (() => {
   const CHEMIN_AIRTABLE = "docs/data/airtable.chiffre.json";
   const DEPOT_PAR_DEFAUT = { proprietaire: "Robin-1506", nom: "Recherchetaff" };
   const ETAPES = ["À postuler", "Postulé", "Entretien", "Offre", "Refus"];
+  const CODES = { "À postuler": "a_postuler", "Postulé": "postule", "Entretien": "entretien", "Offre": "offre", "Refus": "refus" };
+  const COULEURS = { "À postuler": "gris", "Postulé": "bleu", "Entretien": "violet", "Offre": "vert", "Refus": "rouge" };
   const EN_ATTENTE = "Envoi vers Airtable…";
 
   let donnees = vide();
@@ -35,7 +39,7 @@ const Suivi = (() => {
   let synchroEnCours = null;
 
   function vide() {
-    return { version: 1, offres: {}, candidatures: {} };
+    return { version: 1, offres: {}, candidatures: {}, modifications: {} };
   }
 
   const maintenant = () => new Date().toISOString();
@@ -99,7 +103,7 @@ const Suivi = (() => {
 
   function fusionner(a, b) {
     const resultat = vide();
-    for (const section of ["offres", "candidatures"]) {
+    for (const section of ["offres", "candidatures", "modifications"]) {
       const cles = new Set([...Object.keys(a?.[section] || {}), ...Object.keys(b?.[section] || {})]);
       for (const cle of cles) {
         const x = a?.[section]?.[cle];
@@ -198,7 +202,6 @@ const Suivi = (() => {
   // --- Candidatures ---------------------------------------------------------------
 
   const reference = (c) => c.offre_id || c.id;
-  const candidatures = () => replique?.candidatures || [];
   const urlAirtable = (c) => replique?.base && replique?.table
     ? `https://airtable.com/${replique.base}/${replique.table}${c ? `/${c.airtable_id}` : ""}` : null;
 
@@ -209,11 +212,36 @@ const Suivi = (() => {
       .filter((c) => !c.supprime && (c.maj || "") > (transmises[reference(c)] || ""));
   }
 
+  // Étapes et commentaires faits dans le site, pas encore appliqués dans Airtable.
+  function demandesEnAttente() {
+    const appliquees = replique?.appliquees || {};
+    return Object.entries(donnees.modifications || {})
+      .filter(([id, m]) => !m.supprime && !(id in appliquees))
+      .map(([id, m]) => ({ ...m, id }))
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  }
+
+  // Cartes du kanban : la copie d'Airtable, avec tes changements pas encore arrivés
+  // là-bas déjà appliqués, plus les offres en route vers Airtable.
+  function cartes() {
+    const demandes = demandesEnAttente();
+    const liste = (replique?.candidatures || []).map((c) => {
+      const miennes = demandes.filter((m) => m.airtable_id === c.airtable_id);
+      const etape = miennes.filter((m) => m.type === "etape").at(-1)?.etape || c.etape;
+      return { ...c, etape, colonne: CODES[etape] ?? null, deplacee: etape !== c.etape,
+        commentaires: miennes.filter((m) => m.type === "commentaire") };
+    });
+    const enRoute = enAttente().map((c) => ({ cle: `attente-${c.id}`, ref: reference(c), titre: c.titre || "(sans titre)",
+      entreprise: c.entreprise || "", etape: ETAPES[0], colonne: "a_postuler", enRoute: true, commentaires: [] }));
+    return [...enRoute, ...liste];
+  }
+  const cle = (c) => c.cle || c.airtable_id;
+
   // Pour la fiche d'une offre : { etape, url } si elle est dans le suivi, sinon null.
   function candidaturePourOffre(id) {
-    const c = candidatures().find((x) => x.ref === id);
-    if (c) return { etape: c.etape, url: urlAirtable(c) };
-    return enAttente().some((x) => x.offre_id === id) ? { etape: EN_ATTENTE, enAttente: true } : null;
+    const c = cartes().find((x) => x.ref === id);
+    if (!c) return null;
+    return c.enRoute ? { etape: EN_ATTENTE, enAttente: true } : { etape: c.etape, url: urlAirtable(c) };
   }
 
   function creerDepuisOffre(o) {
@@ -224,31 +252,99 @@ const Suivi = (() => {
     modifier("candidatures", id, { id, offre_id: o.id, titre: o.titre, entreprise: o.entreprise || "", lien,
       colonne: "a_postuler" });
     if (statutOffre(o.id) !== "interessant") definirStatutOffre(o.id, "interessant");
-    // La fiche arrive dans Airtable une à deux minutes plus tard : on relit la copie.
+    relireBientot();
+  }
+
+  // Les changements arrivent dans Airtable une à deux minutes plus tard : on relit la copie.
+  function relireBientot() {
     for (const delai of [90, 180]) setTimeout(chargerReplique, delai * 1000);
   }
 
-  // --- Vue Suivi (aperçu en lecture seule) ----------------------------------------
+  function demander(demande) {
+    modifier("modifications", crypto.randomUUID(), { ...demande, date: maintenant() });
+    relireBientot();
+  }
+
+  function changerEtape(c, etape) {
+    if (!c || c.enRoute || etape === c.etape) return;
+    demander({ type: "etape", airtable_id: c.airtable_id, etape });
+  }
+
+  // --- Kanban -----------------------------------------------------------------------
 
   const aRelancer = (c) => c.relance && c.relance <= aujourdhui() && ["postule", "entretien"].includes(c.colonne);
+  const couleur = (etape) => COULEURS[etape] || "jaune";
+  const jourCourt = (jour) => new Date(`${jour}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  const nbNotes = (c) => (c.notes || "").split("\n").filter((l) => l.trim()).length + c.commentaires.length;
+  let glissee = null; // carte en cours de glisser-déposer
 
-  function ligne(c) {
-    const url = urlAirtable(c);
-    const titre = el("span", { class: "offre-titre" }, c.titre);
-    return el("li", { class: "ligne-suivi" + (aRelancer(c) ? " a-relancer" : "") },
-      url ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, titre) : titre,
-      el("span", { class: "discret" }, [
-        c.entreprise,
-        c.date_candidature && `postulé le ${date(c.date_candidature)}`,
-        c.relance && `${aRelancer(c) ? "⏰ relance" : "relance"} le ${date(c.relance)}`,
-      ].filter(Boolean).join(" · ")),
+  function etapesAffichees(liste) {
+    // Étapes ajoutées par toi dans Airtable : avant « Refus », qui reste en dernier.
+    const autres = [...new Set(liste.map((c) => c.etape).filter((e) => e && !ETAPES.includes(e)))];
+    return [...ETAPES.slice(0, -1), ...autres, ETAPES.at(-1)];
+  }
+
+  function pastilleEtape(etape) {
+    return el("span", { class: `kb-etape c-${couleur(etape)}` }, etape);
+  }
+
+  function score(c) {
+    const o = etat.offres.find((x) => x.id === c.ref);
+    return typeof o?.score === "number" ? o.score : null;
+  }
+
+  function carteKanban(c) {
+    const s = score(c);
+    const chips = [
+      c.enRoute && el("span", { class: "kb-chip" }, "⏳ En route vers Airtable"),
+      c.deplacee && el("span", { class: "kb-chip" }, "⏳ Envoi…"),
+      c.relance && el("span", { class: "kb-chip" + (aRelancer(c) ? " kb-chip-alerte" : "") },
+        `${aRelancer(c) ? "⏰" : "↻"} ${jourCourt(c.relance)}`),
+      c.date_candidature && el("span", { class: "kb-chip", title: "Date de candidature" }, `✉ ${jourCourt(c.date_candidature)}`),
+      nbNotes(c) > 0 && el("span", { class: "kb-chip", title: "Notes" }, `💬 ${nbNotes(c)}`),
+      s !== null && el("span", { class: `kb-chip kb-score ${classeScore(s)}`, title: "Score de pertinence" }, String(s)),
+    ].filter(Boolean);
+    const initiale = (c.entreprise || c.titre || "?").trim().charAt(0).toUpperCase();
+    return el("article", {
+      class: "kb-carte" + (c.enRoute ? " kb-en-route" : "") + (aRelancer(c) ? " kb-relance" : ""),
+      tabindex: "0", draggable: c.enRoute ? null : "true", "data-cle": cle(c),
+      onclick: () => ouvrirCarte(cle(c)),
+      onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ouvrirCarte(cle(c)); } },
+      ondragstart: (e) => {
+        glissee = c;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", cle(c));
+        e.currentTarget.classList.add("kb-glissee");
+      },
+      ondragend: (e) => { e.currentTarget.classList.remove("kb-glissee"); glissee = null; },
+    },
+      el("div", { class: "kb-titre" }, c.titre),
+      c.entreprise && el("div", { class: "kb-entreprise" }, el("span", { class: "kb-avatar", "aria-hidden": "true" }, initiale), c.entreprise),
+      chips.length > 0 && el("div", { class: "kb-chips" }, chips),
     );
   }
 
-  function groupe(nom, lignes, ouvert = true) {
-    return el("details", { class: "groupe-suivi", open: ouvert },
-      el("summary", {}, nom, el("span", { class: "discret" }, ` ${lignes.length}`)),
-      el("ul", { class: "liste-suivi" }, lignes));
+  function colonneKanban(etape, liste) {
+    const cartesEtape = liste.filter((c) => c.etape === etape)
+      .sort((a, b) => (a.relance || "9999").localeCompare(b.relance || "9999") || a.titre.localeCompare(b.titre));
+    const zone = el("div", { class: "kb-cartes" }, cartesEtape.map(carteKanban),
+      cartesEtape.length ? null : el("p", { class: "kb-vide" }, "Aucune carte"));
+    const colonne = el("section", { class: `kb-colonne c-${couleur(etape)}`, "aria-label": etape },
+      el("header", { class: "kb-entete" }, pastilleEtape(etape), el("span", { class: "kb-nb" }, String(cartesEtape.length))),
+      zone);
+    colonne.addEventListener("dragover", (e) => {
+      if (!glissee) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      colonne.classList.add("kb-survol");
+    });
+    colonne.addEventListener("dragleave", (e) => { if (!colonne.contains(e.relatedTarget)) colonne.classList.remove("kb-survol"); });
+    colonne.addEventListener("drop", (e) => {
+      e.preventDefault();
+      colonne.classList.remove("kb-survol");
+      changerEtape(glissee, etape);
+    });
+    return colonne;
   }
 
   function etatAirtable() {
@@ -256,12 +352,12 @@ const Suivi = (() => {
       return el("p", { class: "discret" }, "Airtable n'est pas encore branché : tes ajouts au suivi y seront envoyés dès qu'il le sera.");
     }
     if (replique.erreur) return el("p", { class: "alerte" }, `⚠️ Dernière synchro Airtable en échec : ${replique.erreur}`);
-    return el("p", { class: "discret" }, `Copie d'Airtable mise à jour le ${date(replique.maj, true)}. `
-      + "Tes changements dans Airtable arrivent ici dans les heures qui suivent.");
+    return el("p", { class: "discret" }, `Copie d'Airtable du ${date(replique.maj, true)}. Glisse une carte pour changer `
+      + "d'étape ; tes changements arrivent dans Airtable une à deux minutes plus tard.");
   }
 
   function afficher() {
-    const liste = candidatures();
+    const liste = cartes();
     const url = urlAirtable();
     $("ouvrir-airtable").hidden = !url;
     if (url) $("ouvrir-airtable").href = url;
@@ -269,28 +365,73 @@ const Suivi = (() => {
     $("a-relancer").replaceChildren(etatAirtable(), ...(relances.length ? [el("p", { class: "alerte" },
       `⏰ ${relances.length} candidature${relances.length > 1 ? "s" : ""} à relancer : `,
       relances.map((c) => c.entreprise || c.titre).join(", "))] : []));
+    $("kanban").replaceChildren(...etapesAffichees(liste).map((etape) => colonneKanban(etape, liste)));
+    if ($("carte-suivi").open) remplirCarte();
+  }
 
-    const attente = enAttente();
-    // Étapes ajoutées par toi dans Airtable : avant « Refus », qui reste en dernier.
-    const autres = [...new Set(liste.map((c) => c.etape).filter((e) => !ETAPES.includes(e)))];
-    const etapes = [...ETAPES.slice(0, -1), ...autres, ETAPES.at(-1)];
-    const groupes = etapes.map((etape) => {
-      const lignes = liste.filter((c) => c.etape === etape)
-        .sort((a, b) => (a.relance || "9999").localeCompare(b.relance || "9999") || a.titre.localeCompare(b.titre))
-        .map(ligne);
-      return lignes.length ? groupe(etape, lignes, etape !== "Refus") : null;
-    }).filter(Boolean);
-    if (attente.length) {
-      groupes.unshift(groupe(`⏳ ${EN_ATTENTE}`, attente.map((c) => el("li", { class: "ligne-suivi" },
-        el("span", { class: "offre-titre" }, c.titre || "(sans titre)"), el("span", { class: "discret" }, c.entreprise || "")))));
-    }
-    $("liste-suivi").replaceChildren(...(groupes.length ? groupes
-      : [el("p", { class: "discret vide" }, "Aucune candidature. Ouvre une offre et clique sur « Ajouter au suivi ».")]));
+  // --- Fiche d'une carte ----------------------------------------------------------------
+
+  let carteOuverte = null; // clé de la carte affichée
+
+  function propriete(nom, valeur) {
+    return valeur ? [el("dt", {}, nom), el("dd", {}, valeur)] : [];
+  }
+
+  function remplirCarte() {
+    const c = cartes().find((x) => cle(x) === carteOuverte);
+    if (!c) { $("carte-suivi").close(); return; }
+    const choix = etapesAffichees(cartes());
+    const selecteur = el("select", { class: `kb-etape-choix c-${couleur(c.etape)}`, "aria-label": "Étape", disabled: c.enRoute || null,
+      onchange: (e) => changerEtape(c, e.target.value) },
+      choix.map((e) => el("option", { value: e, selected: e === c.etape || null }, e)));
+    const offre = etat.offres.find((o) => o.id === c.ref);
+    const urlFiche = c.enRoute ? null : urlAirtable(c);
+    const notes = (c.notes || "").split("\n").filter((l) => l.trim());
+
+    $("carte-suivi-titre").textContent = c.titre;
+    $("carte-suivi-entreprise").textContent = [c.entreprise, offre?.lieu].filter(Boolean).join(" · ");
+    $("carte-suivi-proprietes").replaceChildren(
+      el("dt", {}, "Étape"), el("dd", {}, selecteur, c.deplacee ? el("span", { class: "discret" }, " ⏳ envoi vers Airtable…") : null),
+      ...propriete("Candidature", c.date_candidature && date(c.date_candidature)),
+      ...propriete("Relance", c.relance && el("span", { class: aRelancer(c) ? "erreur" : "" },
+        `${aRelancer(c) ? "⏰ " : ""}${date(c.relance)}`)),
+      ...propriete("Contact", c.contact),
+      ...propriete("Offre", urlSure(c.lien) && el("a", { href: urlSure(c.lien), target: "_blank", rel: "noopener noreferrer" }, "Voir l'annonce ↗")),
+    );
+    $("carte-suivi-actions").replaceChildren(
+      urlFiche && el("a", { class: "bouton-discret", href: urlFiche, target: "_blank", rel: "noopener noreferrer" }, "Ouvrir dans Airtable ↗"),
+      offre && el("button", { type: "button", class: "bouton-discret", onclick: () => { $("carte-suivi").close(); ouvrirFiche(offre); } },
+        "Fiche de l'offre"),
+    );
+    $("carte-suivi-notes").replaceChildren(
+      ...(notes.length || c.commentaires.length ? [] : [el("li", { class: "discret" }, "Aucune note pour l'instant.")]),
+      ...notes.map((l) => el("li", {}, l)),
+      ...c.commentaires.map((m) => el("li", { class: "kb-note-attente" },
+        `${new Date(m.date).toLocaleDateString("fr-FR")} : ${m.texte}`, el("span", { class: "discret" }, " ⏳ envoi vers Airtable…"))),
+    );
+    $("form-commentaire").hidden = Boolean(c.enRoute);
+    $("carte-suivi-attente").hidden = !c.enRoute;
+  }
+
+  function ouvrirCarte(cleCarte) {
+    carteOuverte = cleCarte;
+    $("commentaire").value = "";
+    remplirCarte();
+    if (!$("carte-suivi").open) $("carte-suivi").showModal();
+  }
+
+  function ajouterCommentaire(e) {
+    e.preventDefault();
+    const texte = $("commentaire").value.trim();
+    const c = cartes().find((x) => cle(x) === carteOuverte);
+    if (!texte || !c || c.enRoute) return;
+    demander({ type: "commentaire", airtable_id: c.airtable_id, texte });
+    $("commentaire").value = "";
   }
 
   function rafraichir() {
-    const liste = candidatures();
-    const enCours = liste.filter((c) => c.colonne !== "refus").length + enAttente().length;
+    const liste = cartes();
+    const enCours = liste.filter((c) => c.colonne !== "refus").length;
     const relances = liste.filter(aRelancer).length;
     const pastille = $("nb-suivi");
     pastille.hidden = !enCours;
@@ -338,6 +479,7 @@ const Suivi = (() => {
     $("bouton-synchro").addEventListener("click", ouvrirReglages);
     $("form-synchro").addEventListener("submit", enregistrerJeton);
     $("oublier-jeton").addEventListener("click", oublierJeton);
+    $("form-commentaire").addEventListener("submit", ajouterCommentaire);
     // Revenir sur l'onglet : on récupère les modifications faites ailleurs.
     document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && synchroniser());
   }

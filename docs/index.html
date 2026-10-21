@@ -93,14 +93,14 @@
     </div>
     </section>
 
-    <!-- Suivi des candidatures : aperçu de la table Airtable -->
+    <!-- Suivi des candidatures : kanban, copie de la table Airtable -->
     <section id="vue-suivi" hidden>
       <div class="suivi-barre">
         <a id="ouvrir-airtable" class="bouton-principal" target="_blank" rel="noopener noreferrer" hidden>Ouvrir Airtable</a>
       </div>
       <p id="etat-synchro" class="discret" aria-live="polite"></p>
       <div id="a-relancer"></div>
-      <div id="liste-suivi"></div>
+      <div id="kanban" class="kanban" aria-label="Candidatures par étape"></div>
     </section>
   </div>
 
@@ -130,6 +130,26 @@
       <div id="fiche-liens" class="liens"></div>
       <h3>Description</h3>
       <div id="fiche-description" class="description"></div>
+    </div>
+  </dialog>
+
+  <!-- Fiche d'une carte du kanban -->
+  <dialog id="carte-suivi" class="fiche panneau" aria-labelledby="carte-suivi-titre">
+    <div class="fiche-contenu">
+      <button class="fermer" type="button" aria-label="Fermer" data-fermer>✕</button>
+      <h2 id="carte-suivi-titre"></h2>
+      <p id="carte-suivi-entreprise" class="discret"></p>
+      <dl id="carte-suivi-proprietes" class="kb-proprietes"></dl>
+      <div id="carte-suivi-actions" class="fiche-actions"></div>
+      <h3>Notes et commentaires</h3>
+      <ul id="carte-suivi-notes" class="kb-notes"></ul>
+      <p id="carte-suivi-attente" class="discret" hidden>Cette candidature est en route vers Airtable : tu pourras la
+        commenter et la déplacer dès qu'elle y sera arrivée (une à deux minutes).</p>
+      <form id="form-commentaire" class="kb-commentaire">
+        <label for="commentaire" class="discret">Ajouter un commentaire (envoyé dans les notes Airtable, daté du jour)</label>
+        <textarea id="commentaire" rows="3" placeholder="Ex. : CV envoyé à la RH, relancer jeudi…" required></textarea>
+        <button type="submit" class="bouton-principal">Ajouter le commentaire</button>
+      </form>
     </div>
   </dialog>
 

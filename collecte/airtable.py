@@ -1,10 +1,12 @@
 """Synchronisation avec Airtable, où tu gères tes candidatures.
 
-  - Site → Airtable : une offre ajoutée au suivi dans le site (fichier
-    docs/data/suivi.chiffre.json) devient une fiche de la table « Candidatures ».
-  - Airtable → site : l'état de toutes les fiches est recopié, chiffré, dans
-    docs/data/airtable.chiffre.json. Le site l'affiche (vue Suivi, en lecture
-    seule), le récap y lit les relances et le score y lit tes candidatures.
+  - Site → Airtable (fichier docs/data/suivi.chiffre.json, écrit par le site) :
+    une offre ajoutée au suivi devient une fiche de la table « Candidatures » ;
+    une carte déplacée dans le kanban du site change d'étape ; un commentaire
+    écrit dans le site s'ajoute, daté, au champ « Notes ».
+  - Airtable → site : l'état de toutes les fiches (notes comprises) est recopié,
+    chiffré, dans docs/data/airtable.chiffre.json. Le site l'affiche (kanban),
+    le récap y lit les relances et le score y lit tes candidatures.
 
 Secrets : AIRTABLE_TOKEN (jeton personnel limité à la base) et AIRTABLE_BASE
 (identifiant de la base, « app… »). La table et ses champs sont créés au
@@ -12,7 +14,7 @@ premier lancement s'ils n'existent pas.
 
 Offre gratuite d'Airtable : 1 000 appels par mois. Une synchronisation complète
 en coûte 1 ou 2. Lancée après une modification du suivi dans le site, elle
-n'appelle Airtable que s'il y a une fiche à créer.
+n'appelle Airtable que s'il y a quelque chose à envoyer.
 
 Lancement : python -m collecte.airtable (voir .github/workflows/airtable.yml).
 """
@@ -178,7 +180,7 @@ def champs_airtable(c: dict, offre: dict | None, aujourdhui: str) -> dict:
 
 
 def depuis_airtable(fiche: dict) -> dict:
-    """Fiche Airtable → candidature de la réplique lue par le site (sans les notes)."""
+    """Fiche Airtable → candidature de la réplique lue par le site."""
     f = fiche.get("fields") or {}
     etape = f.get("Étape") or NOM_ETAPE["a_postuler"]
     return {
@@ -192,6 +194,7 @@ def depuis_airtable(fiche: dict) -> dict:
         "relance": f.get("Relance") or "",
         "contact": f.get("Contact") or "",
         "lien": f.get("Lien de l'offre") or "",
+        "notes": f.get("Notes") or "",
     }
 
 
@@ -222,13 +225,50 @@ def a_transmettre(suivi: dict | None, replique: dict) -> list[dict]:
             if not c.get("supprime") and (c.get("maj") or "") > transmises.get(reference(c), "")]
 
 
+def demandes_en_attente(suivi: dict | None, replique: dict) -> list[dict]:
+    """Changements d'étape et commentaires faits dans le site, pas encore
+    appliqués dans Airtable, dans l'ordre où tu les as faits."""
+    appliquees = replique.get("appliquees") or {}
+    demandes = [{**m, "id": cle} for cle, m in ((suivi or {}).get("modifications") or {}).items()
+                if not m.get("supprime") and cle not in appliquees]
+    return sorted(demandes, key=lambda m: m.get("date") or m.get("maj") or "")
+
+
+def changements_demandes(demandes: list[dict], fiches: list[dict], aujourdhui: str) -> list[dict]:
+    """Modifications Airtable (une par fiche) correspondant aux demandes du site.
+    Les demandes sur une fiche supprimée dans Airtable sont abandonnées."""
+    par_id = {f["id"]: f for f in fiches}
+    champs_par_fiche: dict[str, dict] = {}
+    for m in demandes:
+        fiche = par_id.get(m.get("airtable_id"))
+        if fiche is None:
+            continue
+        champs = champs_par_fiche.setdefault(fiche["id"], {})
+        if m.get("type") == "etape" and m.get("etape"):
+            champs["Étape"] = m["etape"]
+        elif m.get("type") == "commentaire" and (m.get("texte") or "").strip():
+            notes = champs.get("Notes", (fiche.get("fields") or {}).get("Notes") or "").rstrip()
+            jour = date.fromisoformat((m.get("date") or aujourdhui)[:10]).strftime("%d/%m/%Y")
+            champs["Notes"] = f"{notes}\n{jour} : {m['texte'].strip()}".lstrip("\n")
+    return [{"id": i, "fields": c} for i, c in champs_par_fiche.items() if c]
+
+
+def _appliquer(client: ClientAirtable, table: str, fiches: list[dict], modifications: list[dict]) -> list[dict]:
+    if not modifications:
+        return fiches
+    modifiees = {f["id"]: f for f in client.modifier(table, modifications)}
+    return [modifiees.get(f["id"], f) for f in fiches]
+
+
 def synchroniser(client: ClientAirtable, suivi: dict | None, replique: dict | None, offres: dict,
                  maintenant: datetime, complete: bool = True) -> tuple[dict, list[str]]:
-    """Envoie les nouvelles candidatures et recopie l'état d'Airtable.
+    """Envoie les nouvelles candidatures et les demandes du site (étapes,
+    commentaires), puis recopie l'état d'Airtable.
     Renvoie (nouvelle réplique, lignes de compte rendu sans donnée personnelle)."""
     replique = dict(replique or {})
     envoi = a_transmettre(suivi, replique)
-    if not envoi and not complete and replique.get("table"):
+    demandes = demandes_en_attente(suivi, replique)
+    if not envoi and not demandes and not complete and replique.get("table"):
         return replique, ["Rien à envoyer à Airtable."]
 
     aujourdhui = maintenant.astimezone(timezone.utc).date().isoformat()
@@ -249,15 +289,23 @@ def synchroniser(client: ClientAirtable, suivi: dict | None, replique: dict | No
     for c in envoi:
         transmises[reference(c)] = c.get("maj") or maintenant.isoformat(timespec="seconds")
 
+    changements = changements_demandes(demandes, fiches, aujourdhui)
+    fiches = _appliquer(client, table, fiches, changements)
+    # On garde la trace des demandes appliquées (seulement celles encore présentes dans le suivi).
+    presentes = set(((suivi or {}).get("modifications") or {}))
+    appliquees = {k: v for k, v in (replique.get("appliquees") or {}).items() if k in presentes}
+    for m in demandes:
+        appliquees[m["id"]] = m.get("maj") or maintenant.isoformat(timespec="seconds")
+
     modifications = [m for m in (dates_automatiques(f, aujourdhui) for f in fiches) if m]
-    if modifications:
-        modifiees = {f["id"]: f for f in client.modifier(table, modifications)}
-        fiches = [modifiees.get(f["id"], f) for f in fiches]
+    fiches = _appliquer(client, table, fiches, modifications)
 
     candidatures = sorted((depuis_airtable(f) for f in fiches), key=lambda c: (c["titre"], c["airtable_id"]))
-    replique.update(version=1, base=client.base, table=table, transmises=transmises, candidatures=candidatures)
+    replique.update(version=1, base=client.base, table=table, transmises=transmises, appliquees=appliquees,
+                    candidatures=candidatures)
     replique.pop("erreur", None)
     lignes = [f"{len(candidatures)} candidatures dans Airtable, {len(nouvelles)} créées, "
+              f"{len(changements)} modifiées depuis le site ({len(demandes)} demandes), "
               f"{len(modifications)} dates complétées ({client.appels} appels à Airtable)."]
     return replique, lignes
 

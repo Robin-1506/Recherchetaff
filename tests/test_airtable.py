@@ -92,7 +92,8 @@ def test_premiere_synchro_cree_la_table_et_envoie_les_candidatures():
     assert champs["adz-2"]["Étape"] == "Entretien" and champs["adz-2"]["Notes"] == "Entretien mardi"
     assert "Date de candidature" not in champs["ft-1"]  # champs vides non envoyés
     assert {c["ref"] for c in replique["candidatures"]} == {"ft-1", "adz-2"}
-    assert all("notes" not in c for c in replique["candidatures"])  # les notes restent dans Airtable
+    notes = {c["ref"]: c["notes"] for c in replique["candidatures"]}
+    assert notes == {"ft-1": "", "adz-2": "Entretien mardi"}  # notes recopiées (fichier chiffré)
     assert "2 créées" in lignes[0]
 
 
@@ -215,3 +216,37 @@ def test_la_collecte_lit_les_candidatures_d_airtable(monkeypatch, tmp_path):
     lu = principal.charger_suivi("mdp")
     assert lu["offres"] == {"ft-9": {"statut": "ignore"}}
     assert lu["candidatures"]["recA"]["offre_id"] == "ft-1" and lu["candidatures"]["recA"]["relance"] == "2026-10-20"
+
+
+
+def test_etape_et_commentaires_faits_dans_le_site():
+    faux = FauxAirtable()
+    faux.fiches = [{"id": "recA", "fields": {"Poste": "PO", "Étape": "À postuler", "Notes": "Vu sur LinkedIn",
+                                             "Réf. veille": "ft-1"}},
+                   {"id": "recB", "fields": {"Poste": "BA", "Étape": "Entretien"}}]
+    demandes = {
+        "m1": {"type": "etape", "airtable_id": "recA", "etape": "Postulé", "date": "2026-10-21T08:00:00Z", "maj": "a"},
+        "m2": {"type": "commentaire", "airtable_id": "recA", "texte": " CV envoyé à Mme X ", "date": "2026-10-21T08:01:00Z", "maj": "b"},
+        "m3": {"type": "commentaire", "airtable_id": "recA", "texte": "Relance prévue", "date": "2026-10-22T08:00:00Z", "maj": "c"},
+        "m4": {"type": "commentaire", "airtable_id": "recSUPPRIMEE", "texte": "perdu", "date": "2026-10-21T08:00:00Z", "maj": "d"},
+        "m5": {"supprime": True, "maj": "e"},
+    }
+    s = {"offres": {}, "candidatures": {}, "modifications": demandes}
+    replique, lignes = airtable.synchroniser(client(faux), s, {"table": "tblCAND"}, {}, MAINTENANT, complete=False)
+    champs = faux.fiches[0]["fields"]
+    assert champs["Étape"] == "Postulé"
+    assert champs["Notes"] == "Vu sur LinkedIn\n21/10/2026 : CV envoyé à Mme X\n22/10/2026 : Relance prévue"
+    assert champs["Date de candidature"] == "2026-10-21"  # dates automatiques après le passage à « Postulé »
+    assert len([a for a in faux.appels if a[0] == "PATCH"]) == 2
+    assert set(replique["appliquees"]) == {"m1", "m2", "m3", "m4"}
+    assert "1 modifiées depuis le site (4 demandes)" in lignes[0]
+    carte = next(c for c in replique["candidatures"] if c["airtable_id"] == "recA")
+    assert carte["etape"] == "Postulé" and carte["notes"].endswith("Relance prévue")
+    # Déjà appliquées : rien n'est renvoyé, et sans autre demande, aucun appel.
+    nb = len(faux.appels)
+    replique, lignes = airtable.synchroniser(client(faux), s, replique, {}, MAINTENANT, complete=False)
+    assert len(faux.appels) == nb and lignes == ["Rien à envoyer à Airtable."]
+    # Une demande retirée du suivi est oubliée de la liste des demandes appliquées.
+    del s["modifications"]["m4"]
+    replique, _ = airtable.synchroniser(client(faux), s, replique, {}, MAINTENANT)
+    assert "m4" not in replique["appliquees"]
