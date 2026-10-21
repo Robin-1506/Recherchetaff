@@ -100,27 +100,33 @@ dans `docs/vendor/`, licences incluses).
 
 ## Suivi des candidatures (Airtable)
 
-Tes candidatures se gèrent dans **Airtable**, une table en ligne avec une vue en colonnes
-(kanban) : étapes, dates, contact, notes. Le site n'en montre qu'un **aperçu en lecture seule**.
+Tes candidatures sont rangées dans **Airtable**. Le site en affiche une copie sous forme de
+**kanban**, une colonne par étape, et tu peux t'en servir sans ouvrir Airtable.
 
 - Dans la fiche d'une offre : **☆ Intéressante**, **Ignorer** (l'offre disparaît de la liste ;
   « Afficher les ignorées » dans « Plus de filtres » pour la retrouver) et **Ajouter au suivi**.
 - **Ajouter au suivi** : la fiche est créée dans Airtable **une à deux minutes plus tard**
   (étape « À postuler », avec le poste, l'entreprise, le lieu, le score et le lien de l'offre).
-  Ensuite, le bouton devient **Ouvrir dans Airtable**.
-- L'onglet **Suivi** regroupe tes candidatures par étape, avec les relances à faire (⏰).
-  Un clic sur une candidature l'ouvre dans Airtable. Une candidature trouvée ailleurs
-  s'ajoute directement dans Airtable.
-- Quand tu passes une fiche à **« Postulé »** dans Airtable sans date, la synchro remplit la
-  date de candidature (aujourd'hui) et propose une **relance à J+7** (modifiable).
-- Tu peux ajouter tes propres étapes dans Airtable (ex. « Relancé ») : le site les affiche.
+- **Onglet Suivi (kanban)** : une colonne par étape (À postuler, Postulé, Entretien, Offre,
+  Refus, et les étapes que tu ajoutes dans Airtable).
+  - **Glisse une carte** d'une colonne à l'autre pour changer d'étape. Sur téléphone,
+    ouvre la carte et choisis l'étape dans le menu.
+  - **Clique sur une carte** pour voir ses dates, le contact, le lien de l'annonce et
+    l'historique des **notes**, et pour **ajouter un commentaire**. Il est ajouté, daté du
+    jour, au champ « Notes » de la fiche Airtable.
+  - Tant qu'un changement n'est pas arrivé dans Airtable, il est marqué ⏳ (une à deux minutes).
+  - Les relances à faire sont signalées par ⏰.
+- Quand une fiche passe à **« Postulé »** sans date, la synchro remplit la date de
+  candidature (aujourd'hui) et propose une **relance à J+7** (modifiable dans Airtable).
+- Dans Airtable, crée une vue **Kanban** groupée par « Étape » pour retrouver le même tableau.
 
 ### Comment se fait la synchronisation ?
 
 Par une tâche GitHub, **Synchro Airtable** (`.github/workflows/airtable.yml`,
 programme `collecte/airtable.py`). La clé Airtable reste dans les secrets GitHub, jamais sur
 tes appareils.
-- **Site → Airtable** : après chaque « Ajouter au suivi » (une minute environ).
+- **Site → Airtable** : après chaque ajout au suivi, changement d'étape ou commentaire
+  (une à deux minutes).
 - **Airtable → site** : vers 6 h 20 (avant la collecte et le récap), 12 h, 17 h et 21 h. Les
   changements faits dans Airtable apparaissent donc sur le site dans les heures qui suivent.
   Pour aller plus vite : onglet **Actions**, **Synchro Airtable**, **Run workflow**.
@@ -133,11 +139,12 @@ tes appareils.
 
 ### Où sont stockées ces informations ?
 
-- **Airtable** : toutes tes candidatures, dont tes **notes** (elles n'en sortent pas).
-- `docs/data/airtable.chiffre.json` : la copie lue par le site, le récap (relances) et le
-  score (tes candidatures comptent comme des offres aimées). Sans les notes, et **chiffrée
-  avec le mot de passe du site**.
-- `docs/data/suivi.chiffre.json` : tes choix ☆ / Ignorer et tes ajouts au suivi, **chiffrés**.
+- **Airtable** : toutes tes candidatures, avec tes **notes**.
+- `docs/data/airtable.chiffre.json` : la copie lue par le site (notes comprises), le récap
+  (relances) et le score (tes candidatures comptent comme des offres aimées). Elle est
+  **chiffrée avec le mot de passe du site**.
+- `docs/data/suivi.chiffre.json` : tes choix ☆ / Ignorer, tes ajouts au suivi, tes changements
+  d'étape et tes commentaires faits dans le site, **chiffrés**.
   Le site l'enregistre grâce à un **jeton GitHub** saisi une fois par appareil (bouton
   « Synchro »). Sans jeton, un appareil peut consulter le suivi, mais ses choix restent sur
   lui et ses ajouts ne partent pas vers Airtable.
@@ -257,7 +264,8 @@ peut voir** :
   mot de passe, ils sont illisibles.
 
 **Ne sont jamais publiés** : tes clés d'API, ton mot de passe, ton CV (étape 7, rangé
-dans les secrets) et tes notes de candidature (elles restent dans Airtable, qui est privé).
+dans les secrets) et tes notes de candidature (dans Airtable, qui est privé, et chiffrées
+sur le site).
 
 ---
 
