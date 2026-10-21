@@ -1,36 +1,36 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
-// Suivi des candidatures et choix « intéressante » / « ignorer ».
+// Suivi : choix « intéressante » / « ignorer », et candidatures gérées dans Airtable.
 //
-// Stockage :
-//  - une copie sur l'appareil (stockage du navigateur), pour un affichage immédiat ;
-//  - le fichier docs/data/suivi.chiffre.json du dépôt GitHub, chiffré avec le
-//    mot de passe du site. Il est lu et écrit via l'API GitHub, avec un jeton
-//    personnel saisi une fois par appareil. C'est ce qui synchronise
-//    téléphone et ordinateur, et ce que lit le récap du matin.
+// Ce que le site écrit (fichier docs/data/suivi.chiffre.json du dépôt, chiffré
+// avec le mot de passe du site, via l'API GitHub et un jeton saisi une fois
+// par appareil) :
+//  - tes choix ☆ / Ignorer ;
+//  - les offres que tu ajoutes au suivi. La synchro Airtable (GitHub Actions,
+//    collecte/airtable.py) en crée la fiche dans Airtable une minute plus tard.
 //
-// Fusion : chaque élément porte sa date de modification (« maj ») ; en cas de
-// modifications sur deux appareils, la plus récente l'emporte, élément par
-// élément. Une suppression est gardée comme une marque (« supprime »).
+// Ce que le site lit seulement : docs/data/airtable.chiffre.json, la copie de
+// tes candidatures dans Airtable. La gestion (étapes, dates, notes) se fait
+// dans Airtable ; la vue Suivi n'en est qu'un aperçu.
+//
+// Fusion des choix entre appareils : chaque élément porte sa date de
+// modification (« maj ») ; la plus récente l'emporte, élément par élément.
+// Une suppression est gardée comme une marque (« supprime »).
 // ---------------------------------------------------------------------------
 
 const Suivi = (() => {
   const CLE_LOCALE = "veille.suivi";
+  const CLE_REPLIQUE = "veille.airtable";
   const CLE_JETON = "veille.jetonGithub";
   const CHEMIN = "docs/data/suivi.chiffre.json";
+  const CHEMIN_AIRTABLE = "docs/data/airtable.chiffre.json";
   const DEPOT_PAR_DEFAUT = { proprietaire: "Robin-1506", nom: "Recherchetaff" };
-  const DELAI_RELANCE_JOURS = 7;
-  const COLONNES = [
-    ["a_postuler", "À postuler"],
-    ["postule", "Postulé"],
-    ["entretien", "Entretien"],
-    ["offre", "Offre"],
-    ["refus", "Refus"],
-  ];
+  const ETAPES = ["À postuler", "Postulé", "Entretien", "Offre", "Refus"];
+  const EN_ATTENTE = "Envoi vers Airtable…";
 
   let donnees = vide();
-  let ouverte = null; // candidature en cours d'édition
+  let replique = null; // copie d'Airtable
   let minuterie = null;
   let synchroEnCours = null;
 
@@ -40,11 +40,7 @@ const Suivi = (() => {
 
   const maintenant = () => new Date().toISOString();
   const aujourdhui = () => new Date().toLocaleDateString("sv-SE"); // AAAA-MM-JJ, heure locale
-  function plusJours(jour, n) {
-    const d = new Date(`${jour}T12:00:00`);
-    d.setDate(d.getDate() + n);
-    return d.toLocaleDateString("sv-SE");
-  }
+  const aJeton = () => Boolean(local.lire(CLE_JETON));
 
   // --- Dépôt GitHub -----------------------------------------------------------
 
@@ -57,9 +53,9 @@ const Suivi = (() => {
     return DEPOT_PAR_DEFAUT;
   }
 
-  function urlApi() {
+  function urlApi(chemin) {
     const d = depot();
-    return `https://api.github.com/repos/${d.proprietaire}/${d.nom}/contents/${CHEMIN}`;
+    return `https://api.github.com/repos/${d.proprietaire}/${d.nom}/contents/${chemin}`;
   }
 
   function entetes() {
@@ -69,8 +65,8 @@ const Suivi = (() => {
     return h;
   }
 
-  async function lireDistant() {
-    const r = await fetch(`${urlApi()}?ref=main&t=${Date.now()}`, { headers: entetes(), cache: "no-store" });
+  async function lireDistant(chemin) {
+    const r = await fetch(`${urlApi(chemin)}?ref=main&t=${Date.now()}`, { headers: entetes(), cache: "no-store" });
     if (r.status === 404) return { donnees: null, sha: null, sel: null };
     if (r.status === 401) throw new Error("Jeton GitHub refusé (expiré ou incorrect).");
     if (!r.ok) throw new Error(`Lecture du suivi impossible (GitHub, code ${r.status}).`);
@@ -87,7 +83,7 @@ const Suivi = (() => {
       branch: "main",
     };
     if (sha) corps.sha = sha;
-    const r = await fetch(urlApi(), { method: "PUT", headers: entetes(), body: JSON.stringify(corps) });
+    const r = await fetch(urlApi(CHEMIN), { method: "PUT", headers: entetes(), body: JSON.stringify(corps) });
     if (r.status === 409 || r.status === 422) {
       const err = new Error("Conflit de version");
       err.conflit = true;
@@ -122,11 +118,23 @@ const Suivi = (() => {
     const p = $("etat-synchro");
     p.textContent = texte;
     p.classList.toggle("erreur", erreur);
-    $("bouton-synchro").textContent = erreur ? "Synchro ⚠️" : local.lire(CLE_JETON) ? "Synchro ✓" : "Synchro";
+    $("bouton-synchro").textContent = erreur ? "Synchro ⚠️" : aJeton() ? "Synchro ✓" : "Synchro";
   }
 
   function sauverLocal() {
     local.ecrire(CLE_LOCALE, JSON.stringify(donnees));
+  }
+
+  // Copie d'Airtable : relue à chaque synchronisation (lecture seule).
+  async function chargerReplique() {
+    try {
+      const lu = await lireDistant(CHEMIN_AIRTABLE);
+      if (lu.donnees && !identiques(lu.donnees, replique)) {
+        replique = lu.donnees;
+        local.ecrire(CLE_REPLIQUE, JSON.stringify(replique));
+        rafraichir();
+      }
+    } catch { /* on garde la copie déjà connue */ }
   }
 
   // Lit le fichier du dépôt, fusionne avec les données de l'appareil et,
@@ -134,18 +142,18 @@ const Suivi = (() => {
   async function synchroniser() {
     if (synchroEnCours) return synchroEnCours;
     synchroEnCours = (async () => {
-      const avecJeton = Boolean(local.lire(CLE_JETON));
+      chargerReplique();
       for (let essai = 0; essai < 3; essai++) {
         try {
           afficherEtatSynchro("Synchronisation…");
-          const distant = await lireDistant();
+          const distant = await lireDistant(CHEMIN);
           const fusion = fusionner(distant.donnees, donnees);
           const change = !identiques(fusion, donnees);
           donnees = fusion;
           sauverLocal();
           if (change) rafraichir();
-          if (!avecJeton) {
-            afficherEtatSynchro("Lecture seule sur cet appareil : ajoute ton jeton GitHub (bouton « Synchro ») pour enregistrer tes modifications partout.");
+          if (!aJeton()) {
+            afficherEtatSynchro("Lecture seule sur cet appareil : ajoute ton jeton GitHub (bouton « Synchro ») pour enregistrer tes choix partout et envoyer tes ajouts à Airtable.");
             return;
           }
           if (!distant.donnees || !identiques(fusion, fusionner(distant.donnees, null))) {
@@ -165,7 +173,7 @@ const Suivi = (() => {
 
   function planifierSynchro() {
     clearTimeout(minuterie);
-    afficherEtatSynchro(local.lire(CLE_JETON) ? "Modifications en attente d'envoi…" : "Enregistré sur cet appareil seulement.");
+    afficherEtatSynchro(aJeton() ? "Modifications en attente d'envoi…" : "Enregistré sur cet appareil seulement.");
     minuterie = setTimeout(synchroniser, 1500);
   }
 
@@ -187,79 +195,102 @@ const Suivi = (() => {
     modifier("offres", id, statut ? { statut } : { supprime: true });
   }
 
-  const actives = () => Object.values(donnees.candidatures).filter((c) => !c.supprime);
-  const candidaturePourOffre = (id) => actives().find((c) => c.offre_id === id) || null;
-  const nomColonne = (id) => (COLONNES.find(([c]) => c === id) || [, id])[1];
+  // --- Candidatures ---------------------------------------------------------------
 
-  function creerDepuisOffre(o) {
-    const id = crypto.randomUUID();
-    const lien = (o.sources || []).map((s) => s.url).find(Boolean) || "";
-    modifier("candidatures", id, {
-      id, offre_id: o.id, titre: o.titre, entreprise: o.entreprise || "", lien,
-      colonne: "a_postuler", date_candidature: "", relance: "", contact: "", notes: "",
-    });
-    if (statutOffre(o.id) !== "interessant") definirStatutOffre(o.id, "interessant");
-    return donnees.candidatures[id];
+  const reference = (c) => c.offre_id || c.id;
+  const candidatures = () => replique?.candidatures || [];
+  const urlAirtable = (c) => replique?.base && replique?.table
+    ? `https://airtable.com/${replique.base}/${replique.table}${c ? `/${c.airtable_id}` : ""}` : null;
+
+  // Ajoutées dans le site, pas encore arrivées dans Airtable (même règle que collecte/airtable.py).
+  function enAttente() {
+    const transmises = replique?.transmises || {};
+    return Object.values(donnees.candidatures)
+      .filter((c) => !c.supprime && (c.maj || "") > (transmises[reference(c)] || ""));
   }
 
-  // --- Tableau (kanban) ---------------------------------------------------------
+  // Pour la fiche d'une offre : { etape, url } si elle est dans le suivi, sinon null.
+  function candidaturePourOffre(id) {
+    const c = candidatures().find((x) => x.ref === id);
+    if (c) return { etape: c.etape, url: urlAirtable(c) };
+    return enAttente().some((x) => x.offre_id === id) ? { etape: EN_ATTENTE, enAttente: true } : null;
+  }
+
+  function creerDepuisOffre(o) {
+    const existante = Object.values(donnees.candidatures).find((c) => c.offre_id === o.id);
+    const id = existante?.id || crypto.randomUUID();
+    const lien = (o.sources || []).map((s) => s.url).find(Boolean) || "";
+    // Une nouvelle date « maj » suffit pour que la fiche soit (re)créée dans Airtable.
+    modifier("candidatures", id, { id, offre_id: o.id, titre: o.titre, entreprise: o.entreprise || "", lien,
+      colonne: "a_postuler" });
+    if (statutOffre(o.id) !== "interessant") definirStatutOffre(o.id, "interessant");
+    // La fiche arrive dans Airtable une à deux minutes plus tard : on relit la copie.
+    for (const delai of [90, 180]) setTimeout(chargerReplique, delai * 1000);
+  }
+
+  // --- Vue Suivi (aperçu en lecture seule) ----------------------------------------
 
   const aRelancer = (c) => c.relance && c.relance <= aujourdhui() && ["postule", "entretien"].includes(c.colonne);
 
-  function deplacer(c, sens) {
-    const i = COLONNES.findIndex(([id]) => id === c.colonne);
-    const colonne = COLONNES[Math.min(COLONNES.length - 1, Math.max(0, i + sens))][0];
-    modifier("candidatures", c.id, avecRegles({ ...c, colonne }, c.colonne));
-  }
-
-  // Règles automatiques quand une candidature change d'étape.
-  function avecRegles(c, ancienneColonne) {
-    if (c.colonne === "postule" && ancienneColonne !== "postule") {
-      c.date_candidature = c.date_candidature || aujourdhui();
-      c.relance = c.relance || plusJours(c.date_candidature, DELAI_RELANCE_JOURS);
-    }
-    if (["offre", "refus"].includes(c.colonne)) c.relance = "";
-    return c;
-  }
-
-  function carte(c) {
-    const i = COLONNES.findIndex(([id]) => id === c.colonne);
-    return el("li", { class: "carte candidature" + (aRelancer(c) ? " a-relancer" : "") },
-      el("button", { type: "button", class: "candidature-ouvrir", onclick: () => ouvrirCandidature(c.id) },
-        el("span", { class: "offre-titre" }, c.titre || "(sans titre)"),
-        c.entreprise && el("span", { class: "offre-ligne" }, c.entreprise),
-        c.date_candidature && el("span", { class: "offre-ligne" }, `Postulé le ${date(c.date_candidature)}`),
-        c.relance && el("span", { class: "offre-ligne" + (aRelancer(c) ? " relance-due" : "") },
-          `${aRelancer(c) ? "⏰ À relancer" : "Relance"} le ${date(c.relance)}`),
-      ),
-      el("div", { class: "candidature-fleches" },
-        el("button", { type: "button", class: "bouton-discret", disabled: i === 0, "aria-label": "Étape précédente",
-          onclick: () => deplacer(c, -1) }, "←"),
-        el("button", { type: "button", class: "bouton-discret", disabled: i === COLONNES.length - 1,
-          "aria-label": "Étape suivante", onclick: () => deplacer(c, 1) }, "→"),
-      ),
+  function ligne(c) {
+    const url = urlAirtable(c);
+    const titre = el("span", { class: "offre-titre" }, c.titre);
+    return el("li", { class: "ligne-suivi" + (aRelancer(c) ? " a-relancer" : "") },
+      url ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, titre) : titre,
+      el("span", { class: "discret" }, [
+        c.entreprise,
+        c.date_candidature && `postulé le ${date(c.date_candidature)}`,
+        c.relance && `${aRelancer(c) ? "⏰ relance" : "relance"} le ${date(c.relance)}`,
+      ].filter(Boolean).join(" · ")),
     );
   }
 
+  function groupe(nom, lignes, ouvert = true) {
+    return el("details", { class: "groupe-suivi", open: ouvert },
+      el("summary", {}, nom, el("span", { class: "discret" }, ` ${lignes.length}`)),
+      el("ul", { class: "liste-suivi" }, lignes));
+  }
+
+  function etatAirtable() {
+    if (!replique) {
+      return el("p", { class: "discret" }, "Airtable n'est pas encore branché : tes ajouts au suivi y seront envoyés dès qu'il le sera.");
+    }
+    if (replique.erreur) return el("p", { class: "alerte" }, `⚠️ Dernière synchro Airtable en échec : ${replique.erreur}`);
+    return el("p", { class: "discret" }, `Copie d'Airtable mise à jour le ${date(replique.maj, true)}. `
+      + "Tes changements dans Airtable arrivent ici dans les heures qui suivent.");
+  }
+
   function afficher() {
-    const liste = actives();
+    const liste = candidatures();
+    const url = urlAirtable();
+    $("ouvrir-airtable").hidden = !url;
+    if (url) $("ouvrir-airtable").href = url;
     const relances = liste.filter(aRelancer);
-    $("a-relancer").replaceChildren(...(relances.length ? [el("p", { class: "alerte" },
+    $("a-relancer").replaceChildren(etatAirtable(), ...(relances.length ? [el("p", { class: "alerte" },
       `⏰ ${relances.length} candidature${relances.length > 1 ? "s" : ""} à relancer : `,
       relances.map((c) => c.entreprise || c.titre).join(", "))] : []));
-    $("kanban").replaceChildren(...COLONNES.map(([id, nom]) => {
-      const cartes = liste.filter((c) => c.colonne === id)
-        .sort((a, b) => (a.relance || "9999").localeCompare(b.relance || "9999") || (b.maj || "").localeCompare(a.maj || ""));
-      return el("section", { class: "colonne" },
-        el("h3", {}, nom, el("span", { class: "discret" }, ` ${cartes.length}`)),
-        cartes.length ? el("ul", { class: "liste" }, cartes.map(carte)) : el("p", { class: "discret vide" }, "Aucune"),
-      );
-    }));
+
+    const attente = enAttente();
+    // Étapes ajoutées par toi dans Airtable : avant « Refus », qui reste en dernier.
+    const autres = [...new Set(liste.map((c) => c.etape).filter((e) => !ETAPES.includes(e)))];
+    const etapes = [...ETAPES.slice(0, -1), ...autres, ETAPES.at(-1)];
+    const groupes = etapes.map((etape) => {
+      const lignes = liste.filter((c) => c.etape === etape)
+        .sort((a, b) => (a.relance || "9999").localeCompare(b.relance || "9999") || a.titre.localeCompare(b.titre))
+        .map(ligne);
+      return lignes.length ? groupe(etape, lignes, etape !== "Refus") : null;
+    }).filter(Boolean);
+    if (attente.length) {
+      groupes.unshift(groupe(`⏳ ${EN_ATTENTE}`, attente.map((c) => el("li", { class: "ligne-suivi" },
+        el("span", { class: "offre-titre" }, c.titre || "(sans titre)"), el("span", { class: "discret" }, c.entreprise || "")))));
+    }
+    $("liste-suivi").replaceChildren(...(groupes.length ? groupes
+      : [el("p", { class: "discret vide" }, "Aucune candidature. Ouvre une offre et clique sur « Ajouter au suivi ».")]));
   }
 
   function rafraichir() {
-    const liste = actives();
-    const enCours = liste.filter((c) => c.colonne !== "refus").length;
+    const liste = candidatures();
+    const enCours = liste.filter((c) => c.colonne !== "refus").length + enAttente().length;
     const relances = liste.filter(aRelancer).length;
     const pastille = $("nb-suivi");
     pastille.hidden = !enCours;
@@ -269,81 +300,11 @@ const Suivi = (() => {
     if (typeof actualiserActionsFiche === "function" && $("fiche").open) actualiserActionsFiche();
   }
 
-  // --- Fiche de candidature -----------------------------------------------------
-
-  function champs() {
-    return $("form-candidature").elements;
-  }
-
-  function ouvrirCandidature(id) {
-    ouverte = id ? donnees.candidatures[id] : null;
-    const c = ouverte || { colonne: "a_postuler" };
-    const f = champs();
-    for (const nom of ["titre", "entreprise", "lien", "date_candidature", "relance", "contact", "notes"]) {
-      f[nom].value = c[nom] || "";
-    }
-    f.colonne.replaceChildren(...COLONNES.map(([v, nom]) => el("option", { value: v, selected: v === c.colonne }, nom)));
-    $("candidature-titre").textContent = ouverte ? "Candidature" : "Nouvelle candidature";
-    $("b-supprimer-candidature").hidden = !ouverte;
-    $("b-relance-faite").hidden = !ouverte;
-    $("candidature").showModal();
-  }
-
-  function enregistrerFiche() {
-    const f = champs();
-    const id = ouverte ? ouverte.id : crypto.randomUUID();
-    const avant = ouverte || {};
-    const c = { ...avant, id };
-    for (const nom of ["titre", "entreprise", "lien", "colonne", "date_candidature", "relance", "contact", "notes"]) {
-      c[nom] = f[nom].value.trim();
-    }
-    modifier("candidatures", id, avecRegles(c, avant.colonne));
-  }
-
-  function relanceFaite() {
-    const c = { ...ouverte };
-    const jour = aujourdhui();
-    c.relance = plusJours(jour, DELAI_RELANCE_JOURS);
-    c.notes = `${c.notes ? c.notes + "\n" : ""}${date(jour)} : relance effectuée.`;
-    modifier("candidatures", c.id, c);
-    $("candidature").close();
-  }
-
-  function supprimer() {
-    if (!confirm("Supprimer cette candidature ?")) return;
-    modifier("candidatures", ouverte.id, { id: ouverte.id, supprime: true });
-    $("candidature").close();
-  }
-
-  // --- Export / import (sauvegarde) ------------------------------------------------
-
-  function exporter() {
-    const blob = new Blob([JSON.stringify(donnees, null, 2)], { type: "application/json" });
-    const a = el("a", { href: URL.createObjectURL(blob), download: `suivi-candidatures-${aujourdhui()}.json` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-  }
-
-  async function importer(fichier) {
-    try {
-      const contenu = JSON.parse(await fichier.text());
-      if (!contenu.candidatures || !contenu.offres) throw new Error();
-      donnees = fusionner(donnees, contenu);
-      sauverLocal();
-      planifierSynchro();
-      rafraichir();
-      afficherEtatSynchro("Sauvegarde importée.");
-    } catch {
-      afficherEtatSynchro("Ce fichier n'est pas une sauvegarde du suivi.", true);
-    }
-  }
-
   // --- Réglages de synchronisation ----------------------------------------------------
 
   function ouvrirReglages() {
     $("jeton").value = local.lire(CLE_JETON) || "";
-    $("synchro-message").textContent = local.lire(CLE_JETON)
+    $("synchro-message").textContent = aJeton()
       ? "Un jeton est enregistré sur cet appareil."
       : "Aucun jeton sur cet appareil : le suivi y est en lecture seule.";
     $("reglages-synchro").showModal();
@@ -374,29 +335,23 @@ const Suivi = (() => {
   function brancherSuivi() {
     if (branche) return;
     branche = true;
-    $("nouvelle-candidature").addEventListener("click", () => ouvrirCandidature(null));
-    $("form-candidature").addEventListener("submit", enregistrerFiche);
-    $("b-relance-faite").addEventListener("click", relanceFaite);
-    $("b-supprimer-candidature").addEventListener("click", supprimer);
-    $("exporter-suivi").addEventListener("click", exporter);
-    $("importer-suivi").addEventListener("change", (e) => e.target.files[0] && importer(e.target.files[0]));
     $("bouton-synchro").addEventListener("click", ouvrirReglages);
     $("form-synchro").addEventListener("submit", enregistrerJeton);
     $("oublier-jeton").addEventListener("click", oublierJeton);
-    // Revenir sur l'onglet : on récupère les modifications faites sur l'autre appareil.
+    // Revenir sur l'onglet : on récupère les modifications faites ailleurs.
     document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && synchroniser());
   }
 
   function demarrer() {
     brancherSuivi();
     try { donnees = fusionner(JSON.parse(local.lire(CLE_LOCALE) || "null"), null); } catch { donnees = vide(); }
+    try { replique = JSON.parse(local.lire(CLE_REPLIQUE) || "null"); } catch { replique = null; }
     rafraichir();
     synchroniser();
   }
 
   return {
-    demarrer, afficher, synchroniser, statutOffre, definirStatutOffre, candidaturePourOffre, creerDepuisOffre,
-    ouvrirCandidature, nomColonne,
+    demarrer, afficher, synchroniser, statutOffre, definirStatutOffre, candidaturePourOffre, creerDepuisOffre, aJeton,
     _fusionner: fusionner, // pour les tests
   };
 })();
