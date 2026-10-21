@@ -1,0 +1,8 @@
+{
+ "format": "veille-emploi-v1",
+ "kdf": "PBKDF2-SHA256",
+ "iterations": 250000,
+ "sel": "nfteqn7OeJmoxvhgxX5FtA==",
+ "iv": "uCNZoU5wzN8bswg3",
+ "donnees": "6ZeGlpaL/QHQ0Ur366SuQPgPq6vvRx8loUT0o6kygcyWmIdVb/cyuKaofB1GNOYAM9lmZ4AZ+khfBwgL7okZ29rthcWoAlPapp3vAxTgcrJrzfXM5miHzrrat2k0lw/LkiSW4pZ5i1f4NYoAasDMTD2YnkAOjK8IKeZBj3bQoHj8IWbpiJwTkIJjsq5dVGedxALZOavqPksYXwbYf2fLJJCE13a7TA=="
+}
