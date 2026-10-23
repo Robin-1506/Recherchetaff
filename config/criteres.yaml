@@ -106,9 +106,11 @@ alertes_email:
   # service de suivi où mène le lien et on lit seulement sa réponse (la page de
   # l'offre n'est jamais ouverte). Seulement pour les e-mails de moins de
   # « jours » jours, pour ne pas redemander chaque jour les mêmes liens.
+  # Utilisé pour Indeed et APEC.
   redirections:
     motifs:
       - 'engage\.indeed\.com/f/a/'
+      - 'neomarket\.diffusion\.apec\.fr/r/'
     jours: 2
     maximum_par_collecte: 150
 

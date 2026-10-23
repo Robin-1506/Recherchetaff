@@ -302,10 +302,11 @@ déduit l'intitulé, l'entreprise et le lieu. Aucun site n'est consulté directe
   la section `alertes_email:` de `config/criteres.yaml`.
 - **Liens de suivi** : certains sites cachent l'adresse de l'offre dans un lien de suivi codé.
   Le programme la décode à partir du lien lui-même, sans contacter le site.
-- **Indeed** : ses liens de suivi (`engage.indeed.com`) ne contiennent pas l'adresse de l'offre.
+- **Indeed et APEC** : leurs liens de suivi (`engage.indeed.com`, `neomarket.diffusion.apec.fr`)
+  ne contiennent pas l'adresse de l'offre.
   Le programme demande au service de suivi où mène chaque lien et lit seulement sa réponse :
   la page de l'offre n'est jamais ouverte, et les liens de désabonnement ou de réglages ne sont
-  jamais touchés. Indeed compte chaque demande comme un clic. Pour ne pas redemander chaque jour
+  jamais touchés. Le site compte chaque demande comme un clic. Pour ne pas redemander chaque jour
   les mêmes liens, seuls les e-mails de moins de 2 jours sont traités ainsi (réglable dans
   `alertes_email.redirections`).
 - Dans le compte rendu, la forme des adresses de destination est affichée avec les noms des
