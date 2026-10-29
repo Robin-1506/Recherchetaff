@@ -232,3 +232,21 @@ def test_indeed_sans_redirection_diagnostic():
     assert res["offres"] == []
     assert any("aucun lien d'offre reconnu" in ligne for ligne in res["details"])
     assert any("codes 200×2" in ligne for ligne in res["details"])
+
+
+def test_apec_liens_de_suivi_suivis():
+    faux = FauxIndeed({"https://neomarket.diffusion.apec.fr/r/?x=1":
+                       "https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/177654321W?xtor=EPR"})
+    redirections = ae.Redirections(CONFIG["alertes_email"]["redirections"]["motifs"], session=faux)
+    html = """<table><tr><td><a href="https://neomarket.diffusion.apec.fr/r/?x=1">Product Owner H/F</a></td></tr>
+    <tr><td>ACME - Nantes (44)</td></tr>
+    <tr><td><a href="https://neomarket.diffusion.apec.fr/r/?x=2">Se désinscrire</a></td></tr></table>"""
+    from datetime import datetime, timezone
+    from email.utils import format_datetime
+    res = ae.collecter(CONFIG, messages=[message(html, expediteur="offres@diffusion.apec.fr",
+                                                 date=format_datetime(datetime.now(timezone.utc)))],
+                       redirections=redirections)
+    assert [o["sources"][0]["url"] for o in res["offres"]] == [
+        "https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/177654321W"]
+    assert res["offres"][0]["sources"][0]["nom"] == "APEC (alerte)"
+    assert faux.demandes == ["https://neomarket.diffusion.apec.fr/r/?x=1"]  # désinscription jamais touchée
