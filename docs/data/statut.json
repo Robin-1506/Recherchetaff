@@ -1,38 +1,38 @@
 {
-  "derniere_collecte": "2026-10-28T11:40:28+00:00",
+  "derniere_collecte": "2026-10-29T10:41:00+00:00",
   "sources": {
     "france_travail": {
       "nom": "France Travail",
       "ok": true,
-      "date": "2026-10-28T11:40:28+00:00",
-      "nb_offres": 96,
+      "date": "2026-10-29T10:41:00+00:00",
+      "nb_offres": 94,
       "message": ""
     },
     "adzuna": {
       "nom": "Adzuna",
       "ok": true,
-      "date": "2026-10-28T11:40:28+00:00",
-      "nb_offres": 385,
+      "date": "2026-10-29T10:41:00+00:00",
+      "nb_offres": 369,
       "message": ""
     },
     "jooble": {
       "nom": "Jooble",
       "ok": true,
-      "date": "2026-10-28T11:40:28+00:00",
-      "nb_offres": 505,
+      "date": "2026-10-29T10:41:00+00:00",
+      "nb_offres": 508,
       "message": ""
     },
     "alertes_email": {
       "nom": "Alertes e-mail",
       "ok": true,
-      "date": "2026-10-28T11:40:28+00:00",
-      "nb_offres": 71,
+      "date": "2026-10-29T10:41:00+00:00",
+      "nb_offres": 70,
       "message": ""
     }
   },
   "recap": {
     "ok": true,
-    "envoye": true,
-    "message": "Récap envoyé : 10 nouvelles offres, 0 relances."
+    "envoye": false,
+    "message": "Collecte lancée à la main : pas de récap."
   }
 }
